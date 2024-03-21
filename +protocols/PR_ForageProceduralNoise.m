@@ -270,6 +270,33 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                
                o.hNoise.updateEveryNFrames = ceil(S.frameRate / P.noiseFrameRate);
                o.hNoise.updateTextures(); % create the procedural texture
+                %***************************************************************
+           case 8 % Superimposed quartets gratings background
+               o.NoiseHistory = nan(o.MaxFrame,1+6*4); % time, orientation, cpd, phase, direction, speed, contrast
+               
+               % position
+               x = P.GratCtrX*S.pixPerDeg + S.centerPix(1);
+               y = -P.GratCtrY*S.pixPerDeg + S.centerPix(2);
+                              % noise object is created here
+               o.hNoise = stimuli.superimposed_sine_pair(o.winPtr, ...
+                    'numDirections', P.numDir, ...
+                    'numPhases', P.numPhase, ...
+                    'minSF', P.GratSFmin, ...
+                    'numOctaves', P.GratNumOct, ...
+                    'pixPerDeg', S.pixPerDeg, ...
+                    'frameRate', S.frameRate, ...
+                    'speeds', P.GratSpeed, ...
+                    'position', [x y], ...
+                    'screenRect', S.screenRect, ...
+                    'diameter', P.GratDiameter, ...
+                    'durationOn', P.GratDurOn, ...
+                    'durationOff', P.GratDurOff, ...
+                    'isiJitter', P.GratISIjit, ...
+                    'contrasts', P.GratCon, ...
+                    'prefori', P.prefori, ...
+                    'randomizePhase', false); % DO NOT RANDOMISE PHASE
+              % o.hNoise.updateEveryNFrames = ceil(S.frameRate / P.noiseFrameRate);
+               o.hNoise.updateTextures(); % create the procedural texture
                
        end
        %**********************************************************
@@ -543,6 +570,33 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                      % NOTE: store screen time in "continue_run_trial" after flip
                      o.NoiseHistory(o.FrameCount,2) = o.hNoise.x(1);  % xposition of first gabor
                      o.NoiseHistory(o.FrameCount,3) = o.hNoise.mypars(2);  
+
+                  case 8
+                     %o.hNoise.frameUpdate=0;
+                     o.hNoise.afterFrame(); % update parameters
+                     %o.hNoise.afterFrame(); % update parameters
+                     o.hNoise.frameUpdate
+                     if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                         o.hNoise.beforeFrame(); % draw
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                         o.hNoise.beforeFrame(); % draw
+                     else
+                        o.hNoise.beforeFrame(); % draw
+                     end
+                     %**********
+                     o.FrameCount = o.FrameCount + 1;
+                     for gr=1:2
+                         % NOTE: store screen time in "continue_run_trial" after flip
+                         o.NoiseHistory(o.FrameCount,2+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).orientation;  % store orientation
+                         o.NoiseHistory(o.FrameCount,3+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).cpd;  % store spatialfrequency
+                         o.NoiseHistory(o.FrameCount,4+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).phase;
+                         o.NoiseHistory(o.FrameCount,5+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).orientation-90;
+                         o.NoiseHistory(o.FrameCount,6+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).speed;
+                         o.NoiseHistory(o.FrameCount,7+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).contrast;
+                         
+                         % time, orientation, cpd, phase, direction, speed, contrast
+                     end
                      
                      
              end
@@ -748,8 +802,14 @@ classdef PR_ForageProceduralNoise < protocols.protocol
 %         This is gross, this is why we have independant outputs
 %         %DPR - 5/5/2023
         if isfield(o.S,'photodiode')
-            dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
-            ardout=find(cellfun(@(x) strcmp(x,'output_arduino'), o.S.outputs));
+            if ~isempty(o.S.outputs)
+                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
+                ardout=find(cellfun(@(x) strcmp(x,'output_arduino'), o.S.outputs));
+            else
+                dpout=0;
+                ardout=0;
+            end
+
             if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
                 Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
                 
@@ -762,6 +822,8 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                 elseif ardout
                     %ttl-4 high
                     timings=outputs{ardout}.flipBit(4,1);
+                else
+                    timings=[];
                 end
                 %Should be <20 so shouldn't need to preallocate but..
                 o.FlashOutTimings=[o.FlashOutTimings; timings];

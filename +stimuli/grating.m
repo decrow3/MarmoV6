@@ -26,7 +26,7 @@ classdef grating < stimuli.stimulus
     range double = 127;
     gauss logical = true;  %gaussian aperture
     transparent double = 0.5;  % from 0 to 1, how transparent
-    pixperdeg double = 0;  % set non-zero to use for CPD computation
+    pixPerDeg double = 0;  % set non-zero to use for CPD computation
     screenRect = [];   % if radius Inf, then fill whole area
   end
         
@@ -64,7 +64,7 @@ classdef grating < stimuli.stimulus
       p.addParameter('gauss',o.gauss, islogical);
       p.addParameter('bkgd',o.bkgd, isfloat);
       p.addParameter('range',o.range, isfloat);
-      p.addParameter('pixperdeg',o.pixperdeg, isdouble);
+      p.addParameter('pixPerDeg',o.pixPerDeg, isdouble);
                   
       try
         p.parse(args{:});
@@ -86,7 +86,7 @@ classdef grating < stimuli.stimulus
       o.gauss = args.gauss;
       o.bkgd = args.bkgd;
       o.range = args.range;
-      o.pixperdeg = args.pixperdeg;
+      o.pixPerDeg = args.pixPerDeg;
  
     end
         
@@ -123,8 +123,8 @@ classdef grating < stimuli.stimulus
           e1 = exp(-.5*(X.^2 + Y.^2)/sigma^2);
           % Convert cycles to max radians (s1)
        end
-       if (o.pixperdeg > 0)
-           maxRadians = 2 * pi * o.cpd /o.pixperdeg;
+       if (o.pixPerDeg > 0)
+           maxRadians = 2 * pi * o.cpd /o.pixPerDeg;
        else
            maxRadians = 2 * pi * o.cpd / 20;
        end   
@@ -134,8 +134,8 @@ classdef grating < stimuli.stimulus
                  sin(o.orientation*pi/180) * (maxRadians*X) + pha);
        %********** composite grating with two CPD
        if ~isnan(o.cpd2)
-           if (o.pixperdeg > 0)
-               maxRadians2 = 2 * pi * o.cpd2 /o.pixperdeg;
+           if (o.pixPerDeg > 0)
+               maxRadians2 = 2 * pi * o.cpd2 /o.pixPerDeg;
            else
                maxRadians2 = 2 * pi * o.cpd2 / 20;
            end   

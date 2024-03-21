@@ -42,7 +42,6 @@ classdef protocol < matlab.mixin.Copyable % copyable handle class
        warning('off'); % suppress warnings about struct2obj function
        PR = struct(o); % conver the object to a struct
        warning('on');
-        
     end
     
     % **************** Required methods *************************

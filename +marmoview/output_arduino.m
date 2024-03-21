@@ -3,8 +3,28 @@
 
 classdef output_arduino < matlab.mixin.Copyable
     %******* basically is just a wrapper for a bunch of calls to the
-    % arduino toolbox. based on code snippet from huklabBasics
-    %     https://github.com/HukLab/huklabBasics/blob/584b5d277ba120b2e33e4f05c0657cacde67e1fa/%2Btreadmill/pmTread.m
+    % arduino toolbox.
+    
+    % MarmoviewArduinoTTLs_1_1, connecting an arduino at 2,000,000 baud 
+    % eg write '14,1110/n' <-- no spaces. 
+    % 
+    % Value before comma gets written into available bits ignoring others
+    % For example '7,1111' writes the states '0111' (7 in binary) but
+    %'7,1110' writes to '111x' leaving the last bit in same state as it was
+    % previously. This can be very confusing, useful for sending fewest
+    % characters as possible for fast signals. 
+    % 
+    % 20000000 baud at 10bits per character, 200,000 characters/sec. 8
+    % characters at 0.005ms is 0.04ms, but doubtful arduino can actually
+    % respond that fast. 
+
+    % By printing the loop time on the arduino you get ~176,000 polling
+    % loops per second, this drops to ~130,000 polling loops per second
+    % when receiving and setting a signal. So a single send may take the
+    % equalent of 43000 loops at 176000Hz, or 0.2443 seconds.
+    % Variable, but up to .5s delay
+
+    %Use the Photodiode signal for 'real' syncing
     
     properties (SetAccess = public, GetAccess = public)
         arduinoUno % handle to the IOport 
@@ -39,7 +59,7 @@ classdef output_arduino < matlab.mixin.Copyable
             % initialise input parser
             ip = inputParser;
             ip.addParameter('port',[]);
-            ip.addParameter('baud', 115200)
+            ip.addParameter('baud', 2000000)
             ip.addParameter('scaleFactor', [])
             ip.addParameter('rewardMode', 'dist')
             ip.addParameter('maxFrames', 5e3)
@@ -88,32 +108,28 @@ classdef output_arduino < matlab.mixin.Copyable
         function readinput(self,~)
         end
 
-        function timings= starttrial(self,STARTCLOCK,STARTCLOCKTIME)
-            % Send first bit high
-            
+        function starttrial(self,STARTCLOCK,STARTCLOCKTIME)
+            % Set first bit high
             bitmask='0001';
             value=1;
-            datastring = sprintf(['Value:' num2str(value,'%02.f') ', \t Bitmask:' bitmask ',']);
+            datastring = sprintf([num2str(value,'%02.f') ',' bitmask newline]);
             t(1)=GetSecs;
             [nwritten, when, errmsg, prewritetime, postwritetime, lastchecktime] = IOPort('Write', self.arduinoUno, datastring, 1);
             t(2)=GetSecs;   
-    
 
-            timings=[mean(t) when diff(t)];   
+            StartTimings=[mean(t) when diff(t)];   
         end
 
-        function timings=endtrial(self,ENDCLOCK,ENDCLOCKTIME)
-           % Send first bit low
-            
+        function endtrial(self,ENDCLOCK,ENDCLOCKTIME)
+           % Set first bit low
             bitmask='0001';
             value=0;
-            datastring = sprintf(['Value:' num2str(value,'%02.f') ', \t Bitmask:' bitmask ',']);
+            datastring = sprintf([num2str(value,'%02.f') ',' bitmask newline]);
             t(1)=GetSecs;
             [nwritten, when, errmsg, prewritetime, postwritetime, lastchecktime] = IOPort('Write', self.arduinoUno, datastring, 1);
             t(2)=GetSecs;   
-    
 
-            timings=[mean(t) when diff(t)];
+            EndTimings=[mean(t) when diff(t)];
         end
 
         function unpause(self,~)
@@ -127,7 +143,7 @@ classdef output_arduino < matlab.mixin.Copyable
             % no longer flips on VideoSync -> slows everything down
 
             bitmask=dec2bin(2^(bit-1));
-            datastring = sprintf(['Value:' num2str(value,'%02.f') ', \t Bitmask:' bitmask ',']);
+            datastring = sprintf([num2str(value,'%02.f') ',' bitmask newline]);
             t(1)=GetSecs;
             [nwritten, when, errmsg, prewritetime, postwritetime, lastchecktime] = IOPort('Write', self.arduinoUno, datastring, 1);
             t(2)=GetSecs;   

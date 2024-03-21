@@ -218,6 +218,6 @@ switch P.noisetype
 end
 
 
-P.dontsync = 0;
+P.dontsync = 1;
 S.dontsync = 'async Frame Control';
 

@@ -202,6 +202,9 @@ classdef FrameControl < matlab.mixin.Copyable & handle
           o.FData(1:o.FCount,7) = stimOnset;
           o.FData(1:o.FCount,8) = FlipTimestamp;
           o.FData(1:o.FCount,9) = Missed;
+
+          % DPR- adding because having eyepos/screenfliptime and stimulus state (that was shown) is useful  
+          o.FData(1:o.FCount,10) = 0; % Shown state
           %******* Store the Clock Sixlet ***********
           CL = fix(clock);
           CL(1) = CL(1) - 2000;
@@ -275,11 +278,20 @@ classdef FrameControl < matlab.mixin.Copyable & handle
             [vblTime,stimOnset, FlipTimestamp, Missed] = Screen('Flip',o.winPtr,o.FData(eyeI-1,6)+ifi/2,o.dontclear);
        end
         
-%        o.FData(eyeI,5) = state; 
+       % o.FData(eyeI,5) = state; % We want the state that was actually shown
+       % This was commented out in marmov5, why? It's set in grabeye_run_trial,
+       % but shouldn't new state be updated on flip to match state on flip ???
+       
+       % FData(:,1) has the time at begining 'currenttimes' used for
+       % stimuli generation, maybe we should leave FData(:,5) to hold state
+       % before updates and make a new column for new/flipped state
+
         o.FData(eyeI,6) = vblTime;
         o.FData(eyeI,7) = stimOnset;
         o.FData(eyeI,8) = FlipTimestamp;
         o.FData(eyeI,9) = Missed;
+        o.FData(eyeI,10) = state; % State after screen update
+        % For revcorr -6 gives time, 10 gives state
 
      %   disp(o.FData(eyeI,6)-o.FData(eyeI-1,6))
        % Reset the screen

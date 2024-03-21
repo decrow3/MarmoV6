@@ -6,6 +6,11 @@ classdef output_datapixx2 < marmoview.output
         
     end
 
+    properties (SetAccess = public, GetAccess = public)
+        StartTimings %Holds the output hardware times for trial starts
+        EndTimings %Holds the output hardware times for trial endings
+    end
+
     methods
         function obj = output_datapixx2(varargin)
             %Usb2Serial Construct an instance of this class
@@ -47,7 +52,7 @@ classdef output_datapixx2 < marmoview.output
     end
 
     methods (Access = public)
-        function starttrial(obj,STARTCLOCK,STARTCLOCKTIME,~)
+        function StartTimings = starttrial(obj,STARTCLOCK,STARTCLOCKTIME,~)
             % Send first bit high
 %             oldPriority=Priority;
 %             if oldPriority < MaxPriority('GetSecs')
@@ -68,12 +73,12 @@ classdef output_datapixx2 < marmoview.output
 %                 Priority(oldPriority);
 %             end
 
-            timings=[mean(t) dpTime diff(t)];
+            StartTimings=[mean(t) dpTime diff(t)];
             %STARTCLOCKTIME =timings;
             %STARTCLOCK=Datapixx('GetDoutValues');
         end
 
-        function endtrial(obj,ENDCLOCK,ENDCLOCKTIME,~)
+        function EndTimings=endtrial(obj,ENDCLOCK,ENDCLOCKTIME,~)
             % Send first bit low
 %             oldPriority=Priority;
 %             if oldPriority < MaxPriority('GetSecs')
@@ -94,7 +99,7 @@ classdef output_datapixx2 < marmoview.output
 %                 Priority(oldPriority);
 %             end
 
-            timings=[mean(t) dpTime diff(t)];
+            EndTimings=[mean(t) dpTime diff(t)];
             %ENDCLOCKTIME =timings;
             %ENDCLOCK=Datapixx('GetDoutValues');
         end

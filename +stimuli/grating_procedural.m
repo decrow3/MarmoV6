@@ -121,7 +121,8 @@ classdef grating_procedural < stimuli.stimulus
 
        if o.winPtr ~= 0
            if o.square % TODO: this has not been tested
-               o.tex = CreateProceduralSquareWaveGrating(o.winPtr,res, res, modulateColor, o.radius);
+%                o.tex = CreateProceduralSquareWaveGrating(o.winPtr,res, res, modulateColor, o.radius);
+                o.tex = CreateProceduralSquareWaveGrating(o.winPtr,res, res, modulateColor);
            elseif o.gauss % gabor
                o.tex = CreateProceduralGabor(o.winPtr, res, res, [], modulateColor, disableNormalization,contrastPreMultiplicator);
            else
@@ -132,7 +133,10 @@ classdef grating_procedural < stimuli.stimulus
        
        % Determine the texture placement
        if isinf(o.radius)
-           o.texRect = [1 1 o.screenRect(3) o.screenRect(4)];
+%            o.texRect = [1 1 o.screenRect(3) o.screenRect(4)];
+           %If off axis this will leave gaps ^
+           maxdim=hypot(o.screenRect(3),o.screenRect(4));
+           o.texRect = [1 1 maxdim maxdim];
        else
            o.texRect = [0 0 res res];
            dPix2 = floor(res/2);
@@ -154,6 +158,7 @@ classdef grating_procedural < stimuli.stimulus
        if (~isempty(o.tex))
          if isinf(o.radius)
              rect = o.texRect;  % same size as screen itself
+             %rect = CenterRectOnPointd(o.texRect, o.screenRect(3)/2, o.screenRect(4)/2);
          else
              rect = CenterRectOnPointd([0 0 o.radius o.radius]*2, o.position(1), o.position(2));
          end

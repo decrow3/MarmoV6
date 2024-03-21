@@ -275,7 +275,64 @@ classdef PR_FixedProceduralNoise < protocols.protocol
                
                o.hNoise.updateEveryNFrames = ceil(S.frameRate / P.noiseFrameRate);
                o.hNoise.updateTextures(); % create the procedural texture
+
+
+          %***************************************************************
+           case 8 % Superimposed quartets gratings background
+               o.NoiseHistory = nan(o.MaxFrame,1+6*4); % time, orientation, cpd, phase, direction, speed, contrast
                
+               % position
+               x = P.GratCtrX*S.pixPerDeg + S.centerPix(1);
+               y = -P.GratCtrY*S.pixPerDeg + S.centerPix(2);
+                              % noise object is created here
+               o.hNoise = stimuli.superimposed_sine_quartet(o.winPtr, ...
+                    'numDirections', P.numDir, ...
+                    'numPhases', P.numPhase, ...
+                    'minSF', P.GratSFmin, ...
+                    'numOctaves', P.GratNumOct, ...
+                    'pixPerDeg', S.pixPerDeg, ...
+                    'frameRate', S.frameRate, ...
+                    'speeds', P.GratSpeed, ...
+                    'position', [x y], ...
+                    'screenRect', S.screenRect, ...
+                    'diameter', P.GratDiameter, ...
+                    'durationOn', P.GratDurOn, ...
+                    'durationOff', P.GratDurOff, ...
+                    'isiJitter', P.GratISIjit, ...
+                    'contrasts', P.GratCon, ...
+                    'randomizePhase', false); % DO NOT RANDOMISE PHASE
+                o.hNoise.updateTextures(); % create the procedural texture
+  
+%                % noise object is created here
+%                o.hNoise1 = stimuli.grating_drifting_SFlinear(o.winPtr, ...
+%                     'numDirections', P.numDir, ...
+%                     'minSF', P.GratSFmin, ...
+%                     'numOctaves', P.GratNumOct, ...
+%                     'pixPerDeg', S.pixPerDeg, ...
+%                     'frameRate', S.frameRate, ...
+%                     'speeds', P.GratSpeed, ...
+%                     'position', [x y], ...
+%                     'screenRect', S.screenRect, ...
+%                     'diameter', P.GratDiameter, ...
+%                     'durationOn', P.GratDurOn, ...
+%                     'durationOff', P.GratDurOff, ...
+%                     'isiJitter', P.GratISIjit, ...
+%                     'contrasts', P.GratCon, ...
+%                     'randomizePhase', false); % DO NOT RANDOMISE PHASE
+% 
+%                o.hNoise2=o.hNoise1;
+%                     o.hNoise2.rng.seed=o.hNoise1.rng.seed+1;
+%                o.hNoise3=o.hNoise1;
+%                     o.hNoise3.rng.seed=o.hNoise1.rng.seed+2;
+%                o.hNoise4=o.hNoise1;
+%                     o.hNoise4.rng.seed=o.hNoise1.rng.seed+3;
+%                 
+% 
+%                o.hNoise1.updateTextures(); % create the procedural texture
+%                o.hNoise2.updateTextures(); % create the procedural texture
+%                o.hNoise3.updateTextures(); % create the procedural texture
+%                o.hNoise4.updateTextures(); % create the procedural texture
+
        end
        %**********************************************************
        
@@ -380,7 +437,10 @@ classdef PR_FixedProceduralNoise < protocols.protocol
             % State 0 -- Prep, prestimulus
             % State 1 -- Fixating somewhere on screen
             % State 2 -- Fixation broken (refresh stimuli)
-            % State 3 -- ????
+            % State 5??? Don't continue to refresh stimuli until saccade
+                       % finishes
+
+            % State 3 -- ???? faces
             % State 4 -- ISI
             
             o.state = 0;
@@ -553,9 +613,12 @@ classdef PR_FixedProceduralNoise < protocols.protocol
 %                      o.FrameCount = o.FrameCount + 1;
 %                      % NOTE: store screen time in "continue_run_trial" after flip
 %                      o.NoiseHistory(o.FrameCount,2) = o.hNoise.x(1);  % xposition of first gabor
-%                      o.NoiseHistory(o.FrameCount,3) = o.hNoise.mypars(2);  
-                     
-                     
+%                      o.NoiseHistory(o.FrameCount,3) = o.hNoise.mypars(2); 
+
+                 case 8
+                     o.hNoise.frameUpdate=0;
+                     o.hNoise.afterFrame(); % update parameters
+
              end
             %****************
          end
@@ -695,17 +758,32 @@ classdef PR_FixedProceduralNoise < protocols.protocol
                      o.NoiseHistory(o.FrameCount,3) = o.hNoise.mypars(2);  
                      
                      
-                 case 8% Images, copying from PR_BackImage
-                     
-                     %o.hNoise.afterFrame(); % update parameters
-                     o.hNoise.beforeFrame(); % draw
-                     
+                 case 8% drifting gratings, 
+                     %Drawing to see drifting, but this may need to be
+                     %removed
+                     o.hNoise.afterFrame(); % update parameters
+
+                     if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                         o.hNoise.beforeFrame(); % draw
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                         o.hNoise.beforeFrame(); % draw
+                     else
+                        o.hNoise.beforeFrame(); % draw
+                     end
                      %**********
                      o.FrameCount = o.FrameCount + 1;
-                     % NOTE: store screen time in "continue_run_trial" after flip
-                     o.NoiseHistory(o.FrameCount,2) = o.hNoise.x(1);  % xposition of first gabor
-                     o.NoiseHistory(o.FrameCount,3) = o.hNoise.mypars(2);  
-                     
+                     for gr=1:4
+                         % NOTE: store screen time in "continue_run_trial" after flip
+                         o.NoiseHistory(o.FrameCount,2+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).orientation;  % store orientation
+                         o.NoiseHistory(o.FrameCount,3+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).cpd;  % store spatialfrequency
+                         o.NoiseHistory(o.FrameCount,4+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).phase;
+                         o.NoiseHistory(o.FrameCount,5+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).orientation-90;
+                         o.NoiseHistory(o.FrameCount,6+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).speed;
+                         o.NoiseHistory(o.FrameCount,7+(gr-1)*6) = o.hNoise.(['hNoise' num2str(gr)]).contrast;
+                         
+                         % time, orientation, cpd, phase, direction, speed, contrast
+                     end
                      
              end
             %****************
@@ -870,16 +948,20 @@ classdef PR_FixedProceduralNoise < protocols.protocol
         o.x0=x;
         o.y0=y;
 
-        %First check if there is any fixation
-        if o.ds>o.threshold
-            o.state = 2; %Saccade: change stimuli
-        elseif o.state ==2
-            o.state =1; % drop back to state 1
+        % If fixation is broken move to state 2, unless already in it:
+        if o.state ==2
+            o.state = 1.5; % pull into holding state, so stimuli only changes once
         end
 
-            
-        % ALWAYS UPDATE THE PROBES
-        [drop,faceitem] = o.updateProbes(x,y,currentTime); %#ok<ASGLU>
+        %First check if there is any fixation
+        if (o.ds>o.threshold)&&(o.state~=1.5) %eye is moving
+            o.state = 2; %Saccade: change stimuli
+        end
+
+        %If fixating again, return to normal state
+        if (o.state == 1.5)&&(o.ds<=o.threshold)
+            o.state = 1; % drop back to state 1
+        end
 
         % Previously:
         % ALWAYS UPDATE BACKGROUND
@@ -889,6 +971,11 @@ classdef PR_FixedProceduralNoise < protocols.protocol
             % IF SACCADE UPDATE BACKGROUND
             o.updateNoise(NaN,NaN,currentTime);
         end
+
+
+        % ALWAYS UPDATE THE PROBES
+        [drop,faceitem] = o.updateProbes(x,y,currentTime); %#ok<ASGLU>
+
 
         if (o.state == 0)
             o.state = 1;  % jump in and plot eye traces
@@ -929,8 +1016,8 @@ classdef PR_FixedProceduralNoise < protocols.protocol
             o.drawNoise(NaN,NaN,currentTime);
         end
 
-        % Draw probe stimuli
-        if (o.state < 2)
+        % Draw probe stimuli, even during saccade
+        if (o.state < 3)
             Screen('SelectStereoDrawBuffer', o.winPtr, 0);
             o.hProbe{o.targOri}.beforeFrame();  % only one target now
             Screen('SelectStereoDrawBuffer', o.winPtr, 1);
@@ -951,7 +1038,12 @@ classdef PR_FixedProceduralNoise < protocols.protocol
 %         %% PHOTODIODE FLASH, move to frame control/ output(?)
 %         %DPR - 5/5/2023
         if isfield(o.S,'photodiode')
-            dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
+            if ~isempty(o.S.outputs)
+                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
+            else
+                dpout=0;
+            end
+
             if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
                 Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
                 

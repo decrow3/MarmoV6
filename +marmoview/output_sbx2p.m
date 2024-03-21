@@ -15,6 +15,10 @@ classdef output_sbx2p  < handle
         Stoptime
     end
 
+    properties (SetAccess = public, GetAccess = public)
+        StartTimings %Holds the output hardware times for trial starts
+        EndTimings %Holds the output hardware times for trial endings
+    end
     
     methods
         function o = output_sbx2p(~,varargin) 
@@ -37,8 +41,6 @@ classdef output_sbx2p  < handle
            
             %attempt to connect overUDP
             o.connected=o.Connect(o.ip,o.LocalPort,o.RemotePort);
-            
-
         end
 
         function startfile(o,app)
@@ -75,12 +77,14 @@ classdef output_sbx2p  < handle
         function pause(~)
         end
         
-        function starttrial(o,~,~)%(o,STARTCLOCK,STARTCLOCKTIME)
+        function StartTimings = starttrial(o,~,~)%(o,STARTCLOCK,STARTCLOCKTIME)
+            StartTimings=[];
 %             s='M Trial Start';  % Message 
 %             fprintf(o.t,s);
         end
 
-        function endtrial(o,~,~,~)
+        function EndTimings = endtrial(o,~,~,~)
+             EndTimings=[];
 %             s='M Trial End';  % Message
 %             fprintf(o.t,s);
         end

@@ -1025,7 +1025,14 @@ classdef MarmoV6 < matlab.apps.AppBase
             
                     %%%%% GET INPUT VALUES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                     % TODO: THIS SHOULD ALSO BE WHERE IT CHECKS IF IT
-                    % ALREADY HAS INPUTS (i.e., for replay)
+                    % ALREADY HAS INPUTS (i.e., for replay). Keep these
+                    % small! 
+                    % Do we want to be passing the full app.inputs to state
+                    % and screen update every frame? This includes objects
+                    % and parameters from the input class file, not just 
+                    % the current values of inputs/outputs
+                    % TODO: create a 'pass' variable structure?  
+                    %                   only including name, value
                     for i=1:length(app.inputs)
                         %Load other inputs here?
                         app.inputs{i}.readinput(app.inputs{i});
@@ -1047,7 +1054,7 @@ classdef MarmoV6 < matlab.apps.AppBase
                     %and state update 
                     drop = PR.state_and_screen_update(currentTime,x,y,app.inputs,app.outputs);
             
-            
+
                     %Additional independant rewards based on inputs (eg treadmill
                     %distance)
                     for i=1:length(app.inputs)
@@ -1074,7 +1081,9 @@ classdef MarmoV6 < matlab.apps.AppBase
                         end
                     end
             
-            
+                    %Update state value after running stim gen 
+                    state = PR.get_state();
+
                     %**********************************
                     % EYE DISPLAY (SHOWEYE), SCREEN FLIP, and
                     % ANY GUI UPDATING (if not time sensitive states)
@@ -1802,6 +1811,17 @@ classdef MarmoV6 < matlab.apps.AppBase
             Calibfname=[(app.eyetrackername) '_' app.outputSubject '_Calib.mat'];
             save(fullfile(app.supportPath,'Calibrations',Calibfname),'c','dx','dy');
         
+            % Clear plots
+            plot(app.DataPlot1,0,0,'+k');
+            plot(app.DataPlot2,0,0,'+k');
+            plot(app.DataPlot3,0,0,'+k');
+            plot(app.DataPlot4,0,0,'+k');
+            
+            % Eye trace needs to be treated differently to maintain important
+            % properties
+            plot(app.EyeTrace,0,0,'+k');
+            app.EyeTrace.UserData = 15; % 15 degrees of visual arc is default
+            
             %CLOSE ALL INPUTS AND OUTPUTS
             for i=1:length(app.inputs)
                 app.inputs{i}.close;

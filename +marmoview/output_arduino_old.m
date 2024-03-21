@@ -1,5 +1,5 @@
 % Code for sending arduino timing signals high and low, would be nice to
-% keep track of state of bits and read from the arduino
+% also keep track of state of bits and read from the arduino
 
 classdef output_arduino < matlab.mixin.Copyable
     %******* basically is just a wrapper for a bunch of calls to the
@@ -18,6 +18,8 @@ classdef output_arduino < matlab.mixin.Copyable
         rewardProb
         UseAsEyeTracker logical
 
+        StartTimings %Holds the output hardware times for trial starts
+        EndTimings %Holds the output hardware times for trial endings
 
         offset
         wheelPos
@@ -86,32 +88,28 @@ classdef output_arduino < matlab.mixin.Copyable
         function readinput(self,~)
         end
 
-        function timings= starttrial(self,STARTCLOCK,STARTCLOCKTIME)
-            % Send first bit high
-            
+        function starttrial(self,STARTCLOCK,STARTCLOCKTIME)
+            % Set first bit high
             bitmask='0001';
             value=1;
             datastring = sprintf(['Value:' num2str(value,'%02.f') ', \t Bitmask:' bitmask ',']);
             t(1)=GetSecs;
             [nwritten, when, errmsg, prewritetime, postwritetime, lastchecktime] = IOPort('Write', self.arduinoUno, datastring, 1);
             t(2)=GetSecs;   
-    
 
-            timings=[mean(t) when diff(t)];   
+            StartTimings=[mean(t) when diff(t)];   
         end
 
-        function timings=endtrial(self,ENDCLOCK,ENDCLOCKTIME)
-           % Send first bit low
-            
+        function endtrial(self,ENDCLOCK,ENDCLOCKTIME)
+           % Set first bit low
             bitmask='0001';
             value=0;
             datastring = sprintf(['Value:' num2str(value,'%02.f') ', \t Bitmask:' bitmask ',']);
             t(1)=GetSecs;
             [nwritten, when, errmsg, prewritetime, postwritetime, lastchecktime] = IOPort('Write', self.arduinoUno, datastring, 1);
             t(2)=GetSecs;   
-    
 
-            timings=[mean(t) when diff(t)];
+            EndTimings=[mean(t) when diff(t)];
         end
 
         function unpause(self,~)
@@ -127,7 +125,7 @@ classdef output_arduino < matlab.mixin.Copyable
             bitmask=dec2bin(2^(bit-1));
             datastring = sprintf(['Value:' num2str(value,'%02.f') ', \t Bitmask:' bitmask ',']);
             t(1)=GetSecs;
-            [nwritten, when, errmsg, prewritetime, postwritetime, lastchecktime] = IOPort('Write', self.arduinoUno, datastring, blocking=1);
+            [nwritten, when, errmsg, prewritetime, postwritetime, lastchecktime] = IOPort('Write', self.arduinoUno, datastring, 1);
             t(2)=GetSecs;   
     
 
