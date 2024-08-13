@@ -144,7 +144,6 @@ classdef sq_mirror_grating_drifting < stimuli.stimulus
             obj.frameUpdate = 0;
             
             % initialize direction and spatial frequency space
-%             obj.directions = 0:(360/obj.numDirections):(360-(360/obj.numDirections));
             obj.directions = 0:(360/obj.numDirections):(360-(360/obj.numDirections));
             if obj.numOctaves>0
                 obj.spatialFrequencies = obj.minSF * 2.^(0:obj.numOctaves-1);
@@ -172,9 +171,6 @@ classdef sq_mirror_grating_drifting < stimuli.stimulus
         end
         
         function beforeFrame(obj)
-            %Hard code, testing
-            obj.tex.orientation=0;
-
             % Time to draw, first to split and offset,
             % Just doing x-axis
             pos0=obj.tex.position(1);
@@ -188,10 +184,7 @@ classdef sq_mirror_grating_drifting < stimuli.stimulus
             pos1=pos0-offset;
             obj.tex.position(1)=pos1;
 
-            %obj.tex.texRect = [1+pos1 1 obj.screenRect(3)/2+pos1 obj.screenRect(4)];
-            obj.tex.texRect = [1 1 obj.screenRect(3)/(1+sin(obj.orientation)) obj.screenRect(4)/(1+cos(obj.orientation))];
-            shift=pos1.*[sin(obj.orientation) cos(obj.orientation) sin(obj.orientation) cos(obj.orientation)];
-            obj.tex.texRect=obj.tex.texRect+shift;
+            obj.tex.texRect = [1+pos1 1 obj.screenRect(3)/2+pos1 obj.screenRect(4)];
 
             %Draw first square wave
             obj.tex.beforeFrame();
@@ -212,23 +205,15 @@ classdef sq_mirror_grating_drifting < stimuli.stimulus
             %phase2=phase2+phshift;
 
             obj.tex.position(1)=pos2;
-
-            %Just rotate 180
-            obj.tex.phase=phase1;
-            obj.tex.orientation=obj.tex.orientation+180;
+            obj.tex.phase=phase2;
 
             obj.tex.texRect = [obj.screenRect(3)/2+pos1 1 obj.screenRect(3)+pos1 obj.screenRect(4)];
-            obj.tex.texRect = [obj.screenRect(3)/(1+sin(obj.orientation)) obj.screenRect(4)/(1+cos(obj.orientation)) obj.screenRect(3) obj.screenRect(4)];
-            shift=pos1.*[sin(obj.orientation) cos(obj.orientation) sin(obj.orientation) cos(obj.orientation)];
-            obj.tex.texRect=obj.tex.texRect+shift;
-
             %Draw mirrored wave
             obj.tex.beforeFrame();
 
             %Return parameters in texture obj back to original for updating
             obj.tex.position(1)=pos0;
             obj.tex.phase=phase1;
-            obj.tex.orientation=obj.tex.orientation-180;
             
            
 

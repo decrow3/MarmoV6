@@ -1,4 +1,4 @@
-classdef PR_ForageRepeatingNoise < protocols.protocol
+classdef PR_ForagePregenRepeatingNoise < protocols.protocol
   % Forage protocol with procedural background noise
   %
   % The class constructor can be called with a range of arguments:
@@ -54,7 +54,7 @@ classdef PR_ForageRepeatingNoise < protocols.protocol
   end
   
   methods (Access = public)
-    function o = PR_ForageRepeatingNoise(winPtr)
+    function o = PR_ForagePregenRepeatingNoise(winPtr)
         o = o@protocols.protocol(winPtr);
     end
     
@@ -89,7 +89,7 @@ classdef PR_ForageRepeatingNoise < protocols.protocol
            o.hProbe{kk} = stimuli.grating(o.winPtr);  % grating probe
            o.hProbe{kk}.transparent = -P.probecon;  % blend in proportion to gauss
            o.hProbe{kk}.gauss = true;
-           o.hProbe{kk}.pixPerDeg = S.pixPerDeg;
+           o.hProbe{kk}.pixperdeg = S.pixPerDeg;
            o.hProbe{kk}.radius = round(P.proberadius*S.pixPerDeg);
           
            o.hProbe{kk}.range = P.proberange;
@@ -161,13 +161,31 @@ classdef PR_ForageRepeatingNoise < protocols.protocol
                 %***************************************************************
                 %Pregenerate 2500 frames of noise to psuedorandomly loop through
                 %Create 2500 gabor stim objects?
+                StimFrames=nan(S.screenRect(4)-S.screenRect(2),S.screenRect(3)-S.screenRect(1),o.nFrames);
+                StimFramesu8=nan(S.screenRect(4)-S.screenRect(2),S.screenRect(3)-S.screenRect(1),o.nFrames);
                 for ii=1:o.nFrames
                     o.hNoise.frameUpdate=0;
+                    %Actually draw to screen and capture image
+                    o.hNoise.beforeFrame();
+                    Screen('Flip', A.window)
+                    StimFrames(:,:,ii) = mean(Screen(A.window,'GetImage'),3).^(S.gamma);
+
                     o.hNoise.afterFrame();
                     o.StimBank{ii}.x=o.hNoise.x;
                     o.StimBank{ii}.y=o.hNoise.y;
                     o.StimBank{ii}.mypars=o.hNoise.mypars;
+                    
+                    %Save screen image as a texture to play from graphics
+                    %card
+                    StimFramesu8(:,:,ii)=uint8(255.*(StimFrames(:,:,ii)./(255.^S.gamma)-0.5)-0.5+128);
+                    o.StimBank{ii}.tex=Screen('MakeTexture', A.window, StimFramesu8(:,:,ii));
                 end
+
+                %Save out stimuli to file
+                %save('Rocky20240427_V2V1_RepeatingStim_int8', '-v7.3', 'StimFrames')
+                 save(fullfile(app.outputPath, [A.outputFile _stimuli])
+                %Display stimuli
+                %Screen('DrawTexture', A.window, newtexbank(ii));
       %***************************************************************
 
            case 7 % Denser Garborium noise

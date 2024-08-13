@@ -188,15 +188,16 @@ classdef PR_Acuity_Continuous < handle
           switch P.mode
               case 0
                   % Make Gabor stimulus texture
-                  o.hProbe(1).position = [(S.centerPix(1) + round(P.xDeg*S.pixPerDeg)),(S.centerPix(2) - round(P.yDeg*S.pixPerDeg))];
-                  o.hProbe(1).radius = round(P.radius*S.pixPerDeg);
-                  o.hProbe(1).orientation = P.orientation; % vertical for the right
-                  o.hProbe(1).phase = P.phase;
-                  o.hProbe(1).cpd = P.cpd;
-                  o.hProbe(1).range = P.range;
-                  o.hProbe(1).square = logical(P.squareWave);
-                  o.hProbe(1).bkgd = P.bkgd;
-                  o.hProbe(1).updateTextures();
+                  o.hProbe.pixperdeg =S.pixPerDeg;
+                  o.hProbe.position = [(S.centerPix(1) + round(P.xDeg*S.pixPerDeg)),(S.centerPix(2) - round(P.yDeg*S.pixPerDeg))];
+                  o.hProbe.radius = round(P.radius*S.pixPerDeg);
+                  o.hProbe.orientation = P.orientation; % vertical for the right
+                  o.hProbe.phase = P.phase;
+                  o.hProbe.cpd = P.cpd;
+                  o.hProbe.range = P.range;
+                  o.hProbe.square = logical(P.squareWave);
+                  o.hProbe.bkgd = P.bkgd;
+                  o.hProbe.updateTextures();
                   %******************************************
               case 1
                   %Optic flow
@@ -557,14 +558,26 @@ classdef PR_Acuity_Continuous < handle
         eyevX=diff(smooth(eyeX,round(0.1*o.S.frameRate))); 
         eyevY=diff(smooth(eyeY,round(0.1*o.S.frameRate))); 
         nvalid=nnz(o.Traces(:,6)==1);
-
-        %+-1 second correlation window,
-        CCG=xcorr(eyevX+j*eyevY,targvX+j*targvY,o.S.frameRate);
-        CCG=smooth(CCG,5);
+        % 
+        % %+-1 second correlation window,
+        % CCG=xcorr(eyevX+j*eyevY,targvX+j*targvY,o.S.frameRate);
+        % CCG=smooth(CCG,5);
 %         plot(-o.S.frameRate:o.S.frameRate,abs(CCG))
 %         max(abs(CCG))
 
+%vector from eye position to target
+eyetargX=(targX-eyeX);
+eyetargY=(targY-eyeY);
+
+% angle b/n direction of target and direction of eye velocities,
+% cos(theta)=(a.b)/(|a||b|)
+proj=nanmean((eyevX.*eyetargX(2:end)+eyevY.*eyetargY(2:end))./(sqrt(eyevX.^2+eyevY.^2).*sqrt(eyetargX(2:end).^2+eyetargY(2:end).^2)));
+
+%Cross corr between vector to center, and vector speed
+CCG=xcorr(eyevX+j*eyevY,eyetargX(2:end)+j*eyetargY(2:end),240);
+
         o.D.ccg(A.j,:)=CCG;
+        o.D.proj(A.j,:)=proj;
         o.D.nvalid(A.j)=nvalid;
         o.D.error(A.j) = o.error;
         o.D.xDeg(A.j) = P.xDeg;
@@ -593,6 +606,7 @@ classdef PR_Acuity_Continuous < handle
         cpds = unique(o.trialsList(:,3));
         ncpds = size(cpds,1);
         fcXcpd = zeros(1,ncpds);
+        proj_all = zeros(1,ncpds);
         labels = cell(1,ncpds);
         CCG_all= zeros(o.S.frameRate*2+1,ncpds);
         for i = 1:ncpds
@@ -603,13 +617,16 @@ classdef PR_Acuity_Continuous < handle
             if ~isempty (o.D.nvalid(:,o.D.cpd == cpd))
                 CCG_all(:,i)=sum(o.D.nvalid(:,o.D.cpd == cpd)*o.D.ccg(o.D.cpd == cpd,:),1);
                 CCG_all(:,i)=CCG_all(:,i)./sum(o.D.nvalid(:,o.D.cpd == cpd));
+                proj_all(:,i)=nanmean(o.D.proj(o.D.cpd == cpd,:),1);
             end
 
             % When active track is lost, a bunch of eyemovements are often
             % made during a recovery search, this generates correlations
             % over the entire CCG, need to remove baseline to get real peak
-            fcXcpd(i) = max(abs(CCG_all(o.S.frameRate:end,i)))-median(abs(CCG_all(:,i)));
+            % fcXcpd(i) = max(abs(CCG_all(o.S.frameRate:end,i)))-median(abs(CCG_all(:,i)));
 
+            fcXcpd(i) = max(abs(CCG_all(o.S.frameRate:end,i)))-median(abs(CCG_all(:,i)));
+            fcXcpd(i) = proj_all(i);
             labels{i} = num2str(round(cpd)); %num2str(round(10*cpd)/10);
         end
         
@@ -628,11 +645,11 @@ classdef PR_Acuity_Continuous < handle
 %         if any(fcXcpd>1)
 %             huh=1; % How can xcorr give values>1 here
 %         end
-        if max(fcXcpd)>1
-            axis(A.DataPlot3,[.25 ncpds+.75 0 max(fcXcpd)]);
-        else
-            axis(A.DataPlot3,[.25 ncpds+.75 0 1]);
-        end
+        %if max(fcXcpd)>1
+            axis(A.DataPlot3,[.25 ncpds+.75 0 max([max(fcXcpd) 0.1])]);
+        % else
+        %     axis(A.DataPlot3,[.25 ncpds+.75 0 1]);
+        % end
     end
     
   end % methods

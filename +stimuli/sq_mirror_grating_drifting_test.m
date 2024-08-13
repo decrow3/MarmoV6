@@ -173,7 +173,7 @@ classdef sq_mirror_grating_drifting < stimuli.stimulus
         
         function beforeFrame(obj)
             %Hard code, testing
-            obj.tex.orientation =0;
+            obj.tex.orientation=0;
 
             % Time to draw, first to split and offset,
             % Just doing x-axis
@@ -190,6 +190,8 @@ classdef sq_mirror_grating_drifting < stimuli.stimulus
 
             %obj.tex.texRect = [1+pos1 1 obj.screenRect(3)/2+pos1 obj.screenRect(4)];
             obj.tex.texRect = [1 1 obj.screenRect(3)/(1+sin(obj.orientation)) obj.screenRect(4)/(1+cos(obj.orientation))];
+            shift=pos1.*[sin(obj.orientation) cos(obj.orientation) sin(obj.orientation) cos(obj.orientation)];
+            obj.tex.texRect=obj.tex.texRect+shift;
 
             %Draw first square wave
             obj.tex.beforeFrame();
@@ -216,6 +218,10 @@ classdef sq_mirror_grating_drifting < stimuli.stimulus
             obj.tex.orientation=obj.tex.orientation+180;
 
             obj.tex.texRect = [obj.screenRect(3)/2+pos1 1 obj.screenRect(3)+pos1 obj.screenRect(4)];
+            obj.tex.texRect = [obj.screenRect(3)/(1+sin(obj.orientation)) obj.screenRect(4)/(1+cos(obj.orientation)) obj.screenRect(3) obj.screenRect(4)];
+            shift=pos1.*[sin(obj.orientation) cos(obj.orientation) sin(obj.orientation) cos(obj.orientation)];
+            obj.tex.texRect=obj.tex.texRect+shift;
+
             %Draw mirrored wave
             obj.tex.beforeFrame();
 
@@ -254,7 +260,7 @@ classdef sq_mirror_grating_drifting < stimuli.stimulus
                     
                     % orientation
                     if length(obj.directions)>1
-                        obj.orientation = randsample(obj.rng, obj.directions, 1)+90; % orientation is 90Â° from direction
+                        obj.orientation = randsample(obj.rng, obj.directions, 1)+90; % orientation is 90° from direction
                     else
                         obj.orientation = obj.directions +90;
                     end

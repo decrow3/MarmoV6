@@ -1,4 +1,4 @@
-classdef PR_ForageRepeatingNoise < protocols.protocol
+classdef PR_ForagePregenRepeatingNoise < protocols.protocol
   % Forage protocol with procedural background noise
   %
   % The class constructor can be called with a range of arguments:
@@ -54,7 +54,7 @@ classdef PR_ForageRepeatingNoise < protocols.protocol
   end
   
   methods (Access = public)
-    function o = PR_ForageRepeatingNoise(winPtr)
+    function o = PR_ForagePregenRepeatingNoise(winPtr)
         o = o@protocols.protocol(winPtr);
     end
     
@@ -161,13 +161,56 @@ classdef PR_ForageRepeatingNoise < protocols.protocol
                 %***************************************************************
                 %Pregenerate 2500 frames of noise to psuedorandomly loop through
                 %Create 2500 gabor stim objects?
+                
+                StimFramesu8=zeros(S.screenRect(4)-S.screenRect(2),S.screenRect(3)-S.screenRect(1),o.nFrames,'uint8');
+                
+                %Reset stimuli to begining
+                %nonsense 0th frame
+                o.hNoise.frameUpdate=0;
+%                 o.hNoise.beforeFrame();
+%                 Screen('Flip', o.winPtr)
+                o.hNoise.afterFrame();
+
                 for ii=1:o.nFrames
                     o.hNoise.frameUpdate=0;
+                    %Actually draw to screen and capture image
+                    o.hNoise.beforeFrame();
+                    Screen('Flip', o.winPtr)
+                    StimFrame = mean(Screen(o.winPtr,'GetImage'),3).^(S.gamma);
+
                     o.hNoise.afterFrame();
                     o.StimBank{ii}.x=o.hNoise.x;
                     o.StimBank{ii}.y=o.hNoise.y;
                     o.StimBank{ii}.mypars=o.hNoise.mypars;
+                    
+                    %Save screen image as a texture to play from graphics
+                    %card
+                    StimFramesu8(:,:,ii)=uint8(255.*(StimFrame./(255.^S.gamma)-0.5)-0.5+128);
+                    o.StimBank{ii}.tex=Screen('MakeTexture', o.winPtr, StimFramesu8(:,:,ii));
                 end
+
+                %Saving is tricky, because file names weren't passed
+                taskPath = fileparts(fileparts(mfilename('fullpath')));
+                outputPath = fullfile(taskPath, 'Output');
+
+                outputDate = char(datetime('today', 'format', 'ddMMyy'));
+                outputPrefix = S.protocol;
+                outputSubject=S.subject;
+
+                i = 0; outputSuffix = '00';
+                outputFile=strcat(outputPrefix,'_',outputSubject,'_',outputDate,'_',outputSuffix,'.mat');
+                while exist(fullfile(outputPath,outputFile),'file') %exist([app.outputPath app.A.outputFile],'file')
+                i = i+1; outputSuffix = num2str(i,'%.2d');
+                outputFile=strcat(outputPrefix,'_',outputSubject,'_',outputDate,'_',outputSuffix,'.mat');
+                end
+                outputFile=strcat(outputPrefix,'_',outputSubject,'_',outputDate,'_',outputSuffix,'_Stim.mat');
+                save(fullfile(outputPath,outputFile), '-v7.3', 'StimFramesu8');
+                
+                %Save out stimuli to file
+                %save('Rocky20240427_V2V1_RepeatingStim_int8', '-v7.3', 'StimFrames')
+                %save(fullfile(app.outputPath, [A.outputFile '_stimuli']), '-v7.3', 'StimFrames')
+                %Display stimuli
+                %Screen('DrawTexture', o.winPtr, o.StimBank{ii}.tex);
       %***************************************************************
 
            case 7 % Denser Garborium noise
@@ -352,7 +395,10 @@ classdef PR_ForageRepeatingNoise < protocols.protocol
                          o.NoiseHistory(o.FrameCount,4) = ii;  
                      end
 
-                     o.hNoise.beforeFrame(); % always draw
+%                      o.hNoise.beforeFrame(); % always draw
+
+                    %Draw from texture bank
+                    Screen('DrawTexture', o.winPtr, o.StimBank{ii}.tex);
                     o.hNoise.frameUpdate = mod(o.hNoise.frameUpdate +1, o.hNoise.updateEveryNFrames);
              end
             %****************

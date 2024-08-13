@@ -25,6 +25,7 @@ dotflow.Xbot=  A.screenRect(1);
 dotflow.Ytop=  A.screenRect(2);
 dotflow.Ybot=  A.screenRect(4);
 
+%%
 dotflow.beforeTrial()
 dotflow.stimValue = 1;
 dotflow.beforeFrame()

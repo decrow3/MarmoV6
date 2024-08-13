@@ -266,6 +266,7 @@ classdef PR_OKN_converging < protocols.protocol
                      o.StimHistory(o.FrameCount,2:end) = [o.hStim.x(1:o.noiseNum) o.hStim.y(1:o.noiseNum)];  % xposition of first gabor
                  
                  case 2 %Sq wave
+
                   o.hStim.afterFrame(); % update parameters
                      if isfield(o.S,'stereoMode') && o.S.stereoMode>0
                          Screen('SelectStereoDrawBuffer', o.winPtr, 0);
