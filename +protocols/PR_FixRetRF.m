@@ -1,4 +1,4 @@
-classdef PR_FixBarRF < handle
+classdef PR_FixRetRF < handle
   % Matlab class for running an experimental protocl
   %
   % The class constructor can be called with a range of arguments:
@@ -32,6 +32,7 @@ classdef PR_FixBarRF < handle
     P;      % copy of Params struct (loaded per trial)
     %********* stimulus structs for use
     Bars;
+    ringwedges;
     Faces;             % object that stores face images for use
     hFix;              % object for a fixation point
     fixbreak_sound;    % audio of fix break sound
@@ -52,7 +53,8 @@ classdef PR_FixBarRF < handle
     FrameCount = 0;    % count noise frames
     ProbeHistory = []; % list of history for probe objects
     StartTex = [];
-    BarHistory = [];
+    Reverse = [];
+    RetHistory = [];
     TexHistory = [];
     PFrameCount = 0;   % count probe frames (should be same as noise for now)
     nFramesPerStim = 30; 
@@ -75,7 +77,7 @@ classdef PR_FixBarRF < handle
   end
   
   methods (Access = public)
-    function o = PR_FixBarRF(winPtr)
+    function o = PR_FixRetRF(winPtr)
       o.winPtr = winPtr;     
       o.trialsList = [];  % should be set by generate call
     end
@@ -111,20 +113,20 @@ classdef PR_FixBarRF < handle
        
         
        %Would probably be better to set up these three conditions in the
-       %trialList 
-       %***** create a set of 1D noise textures to move around as probe
-       o.Bars = stimuli.barRFs(o.winPtr,'bkgd',S.bgColour,'gray',false); % 1D noise as probe
-       %o.Bars.prctgray = 33.33;
-       o.Bars.sparsity = 0;
-       o.Bars.contrast = P.probecon;
-       o.Bars.texnum   = 1;
-       o.Bars.barwidth  = round(P.barwidth*S.pixPerDeg);
-       o.Bars.pxradius   = round(P.proberadius*S.pixPerDeg);
-       %o.Bars.prefori   = P.prefori;
-       o.Bars.pixPerDeg = S.pixPerDeg;
-       
-       o.Bars.makeTex();
-       o.Bars.position = [0,0]*S.pixPerDeg + S.centerPix;
+%        %trialList 
+%        %***** create a set of 1D noise textures to move around as probe
+%        o.Bars = stimuli.barRFs(o.winPtr,'bkgd',S.bgColour,'gray',false); % 1D noise as probe
+%        %o.Bars.prctgray = 33.33;
+%        o.Bars.sparsity = 0;
+%        o.Bars.contrast = P.probecon;
+%        o.Bars.texnum   = 1;
+%        o.Bars.barwidth  = round(P.barwidth*S.pixPerDeg);
+%        o.Bars.pxradius   = round(P.proberadius*S.pixPerDeg);
+%        %o.Bars.prefori   = P.prefori;
+%        o.Bars.pixPerDeg = S.pixPerDeg;
+%        
+%        o.Bars.makeTex();
+%        o.Bars.position = [0,0]*S.pixPerDeg + S.centerPix;
        
   
       
@@ -149,7 +151,7 @@ classdef PR_FixBarRF < handle
         %**********************************
    
         %******** store history of flashed gratings
-        o.NoiseHistory = nan(o.MaxFrame,4);   %time, x, y, id
+        o.NoiseHistory = nan(o.MaxFrame,5);   %time, x, y, phase, texnum
         
         %********** load in a fixation error sound ************
         [y,fs] = audioread(['SupportData',filesep,'gunshot_sound.wav']);
@@ -157,10 +159,130 @@ classdef PR_FixBarRF < handle
         o.fixbreak_sound = y;
         o.fixbreak_sound_fs = fs;
         %*********************
+
+
+        %********* parameters for wedges ***********
+        %Just get wedges working
+        o.ringwedges=stimuli.ringwedges(o.winPtr);%,'bkgd',S.bgColour,'gray',false);
+       o.ringwedges.stim='wedge';
+       %o.ringwedges.wedgeWidth=1;
+       %o.ringwedges.nAng=1;
+       %o.ringwedges.innerRad=0.1;
+       %o.ringwedges.stimSize=5;
+
+       %o.ringwedges.stimCtr=[0,0];
+
+       %o.ringwedges.pos=[0,0];
+       %o.ringwedges.motionSteps=5;
+       %o.ringwedges.nRad=5;
+       %o.ringwedges.period =1;
+       %o.ringwedges.tf =2;
+
+       %o.ringwedges.srcRect=S.screenRect;
+       %o.ringwedges.destRect=S.screenRect;
+       
+       o.ringwedges.sparsity = 0;
+       o.ringwedges.contrast = 80;
+       o.ringwedges.texnum   = 1;
+       o.ringwedges.barwidth  = round(2*S.pixPerDeg);
+       o.ringwedges.pxradius   = round(P.proberadius*S.pixPerDeg);
+       %o.ringwedges.prefori   = P.prefori;
+       o.ringwedges.pixPerDeg = S.pixPerDeg;
+       o.ringwedges.displayctr=S.centerPix;
+
+       %TODO, need to move these to settings
+        %Add phase min and max, number of increments
+
+        %Parameters for the polar checkboard carrier
+
+        %Parameters for the moving envelope
+
+
+        % %Intervals for increments of phase of polar angle of center of wedges
+        phinc       = pi/8;%pi/24;
+        wedgeWidth  = phinc;%1.5*phinc;
+        %Angular width of wedges is o.wedgeWidth/o.nAng;
+        fixRadius = .5;
+        
+        %% Some of the following can just be left as defaults in ringwedges
+        % Starting phases, clockwise from leftward=0, pi/2 (5pi/2) = up, pi= right, 3*pi/2 down
+            subwedperwed=2;% subwedges are offcentered by .5
+            
+            o.ringwedges.wedgeWidth = subwedperwed;       %number of sub-wedges in a wedge  
+            o.ringwedges.nAng = subwedperwed*2*pi/(wedgeWidth);%42;%12;        % number of sub-wedges in a circle *2    
+           
+            %o.ringwedges.stimSize = 20; % Radius in visual angle
+            o.ringwedges.innerRad = fixRadius; 
+            o.ringwedges.nRad = 12;%24;            % number of sub-rings in a circle * 2
+            o.ringwedges.nBar = 5;             % number of bars in the square * 2
+               
+            o.ringwedges.ringWidth = 1;        %number of sub-rings in a ring (has to be odd)
+            o.ringwedges.barWidth = .8;
+            o.ringwedges.fixSize = 10;         %fixation point size
+            o.ringwedges.junkFrames = 8;             %junk before stimulus in seconds
+            o.ringwedges.meriThick = 1/10;     %what proportion of circle is a wedge for the meridian 
+            o.ringwedges.meriStart= 'horizontal'; %which to start with: horizontal or vertical
+            o.ringwedges.motionSteps = 8;
+
+            %Bottom left quadrant, little bit of overlap on vertical
+            %meridian
+            o.ringwedges.minphase = pi/2-pi/12;
+            o.ringwedges.maxphase = pi - pi/12;
+
+            %Envelope
+            switch o.ringwedges.stim
+                case 'full-field'
+                    o.ringwedges.tf = 8;               %Hz
+                    o.ringwedges.stimPeriod = 1.5;
+                    o.ringwedges.period = 30; % 24 sec (32 frames at .75 s TR)
+                    o.ringwedges.nCycles = 6; % 24 x 6 = 180 (3 min) 240 frames at .75 s TR
+                case 'bar'
+                    o.ringwedges.tf = 12;               %Hz
+                    o.ringwedges.period = 15;          %seconds in entire cycle as in both orientations
+                    o.ringwedges.nCycles = size(o.ringwedges.orientationSequences,1);%11; % 8 orientations and 4 blanks 15x12 = 180 (3 min) 240 frames at .75 s TR
+                otherwise
+                    o.ringwedges.tf = 8;               %Hz
+                    o.ringwedges.period = 15;%100          %seconds in entire cycle as in both orientations
+                    o.ringwedges.nCycles = 1; % 18x12 = 216 (3.6 min) 288 volumes at .75 s TR
+            end
+            
+      
+            switch o.ringwedges.stim
+                case 'ring'
+                    o.ringwedges.startPhase = .5*o.ringwedges.ringWidth/o.ringwedges.nRad;
+                case 'wedge'
+                    o.ringwedges.startPhase = 0;%.25*pi;%.25; %.5*o.ringwedges.wedgeWidth/o.ringwedges.nAng; %.25 - 
+                case 'meridian' 
+                    if o.ringwedges.meriStart=='horizontal' %#ok<STCMP>
+                        o.ringwedges.startPhase = .5;
+                    else
+                        o.ringwedges.startPhase = 0;
+                    end
+                otherwise
+                    o.ringwedges.nOrientations = 8;
+                    o.ringwedges.startPhase = 0;
+            end
+            
+        
+            o.ringwedges.pos = [0 0]';
+            o.ringwedges.stimCtr = [0 0 0];[960, 540, 0]; 
+            ncopies = 1;
+            o.ringwedges.isi = 0; % blank interstimulus interval between each matrix module
+   
+            
+            %Initialise but should be really be updated in trialprep 
+       
+
+
+            %o.ringwedges.startPhase=0;
+            %o.ringwedges.Reverse=0;
+           o.ringwedges.makeTex();
+           o.ringwedges.position = [0,0]*S.pixPerDeg + S.centerPix;
+            %%
     end
    
     function closeFunc(o)
-        o.Bars.CloseUp();
+        o.ringwedges.CloseUp();
         o.hFix.CloseUp();
     end
    
@@ -174,7 +296,18 @@ classdef PR_FixBarRF < handle
           o.P = P;      
           o.FrameCount = 0;   % for noise history
 
-          o.StartTex=randi(o.Bars.Ntex,1);
+          o.StartTex=randi(o.ringwedges.Ntex,1);
+          o.Reverse=round(rand(o.ringwedges.rng,1)+eps);
+% 
+%           %TODO, at beginning of trial
+%           %Initialise random startphase, increments
+%           phase_step= randi(o.ringwedges.rng, o.ringwedges.Ntex)./o.ringwedges.Ntex;
+%           o.ringwedges.startTex=o.ringwedges.minphase+ ...
+%               (o.ringwedges.maxphase-o.ringwedges.minphase)*phase_step;
+%           %Randomise direction for motion (CW/CCW)
+%           Reverse=round(rand(o.ringwedges.rng,1)+eps);
+%           o.ringwedges.reverse=reverse;
+
           %*******************
         
           %%%% Trial control -- Update certain parameters depending on run type %%%%%
@@ -305,24 +438,47 @@ classdef PR_FixBarRF < handle
             o.FrameCount = o.FrameCount + 1;
             o.PFrameCount = o.FrameCount;
 
-            %%  %updating bars
+%             %%  %updating bars
+%             kk = ~mod(o.PFrameCount, o.nFramesPerStim);
+%             
+%             if isempty(o.Bars.texnum)
+%                 o.Bars.texnum  = randi(o.Bars.rng, o.Bars.Ntex);
+%                 o.Bars.orinum  = randi(o.Bars.rng, length(o.P.orilist));
+%                 o.Bars.prefori = o.P.prefori(o.Bars.orinum);
+%             elseif kk %update
+%                 o.Bars.texnum  = randi(o.Bars.rng, o.Bars.Ntex);  %o.StartTex + kk;%o.Bars.texnum +1; %randi(o.Bars.rng, o.Bars.Ntex);  
+%                 o.Bars.orinum  = randi(o.Bars.rng, length(o.P.orilist));
+%                 o.Bars.prefori = o.P.orilist(o.Bars.orinum);
+%             end
+% 
+%             if o.Bars.texnum>o.Bars.Ntex
+%                 o.Bars.texnum=rem(o.Bars.texnum-1,o.Bars.Ntex)+1;
+%                 %o.Bars.texnum=o.Bars.texnum-o.Bars.Ntex;
+%             end
+
+            %% Update rings/wedges, just increment???
             kk = ~mod(o.PFrameCount, o.nFramesPerStim);
             
-            if isempty(o.Bars.texnum)
-                o.Bars.texnum  = randi(o.Bars.rng, o.Bars.Ntex);
-                o.Bars.orinum  = randi(o.Bars.rng, length(o.P.orilist));
-                o.Bars.prefori = o.P.prefori(o.Bars.orinum);
+            if isempty(o.ringwedges.texnum)
+                o.ringwedges.texnum  = o.startTex;%randi(o.ringwedges.rng, o.ringwedges.Ntex);%
+                o.ringwedges.orinum  = randi(o.ringwedges.rng, length(o.P.orilist));
+                o.ringwedges.prefori = o.P.prefori(o.ringwedges.orinum);
             elseif kk %update
-                o.Bars.texnum  = randi(o.Bars.rng, o.Bars.Ntex);  %o.StartTex + kk;%o.Bars.texnum +1; %randi(o.Bars.rng, o.Bars.Ntex);  
-                o.Bars.orinum  = randi(o.Bars.rng, length(o.P.orilist));
-                o.Bars.prefori = o.P.orilist(o.Bars.orinum);
+                if o.Reverse <1 
+                   o.ringwedges.texnum  = o.ringwedges.texnum +1; %randi(o.Bars.rng, o.Bars.Ntex);  %o.StartTex + kk;%o.Bars.texnum +1; %randi(o.Bars.rng, o.Bars.Ntex);  
+                else
+                    o.ringwedges.texnum  = o.ringwedges.texnum -1;
+                    if o.ringwedges.texnum<1
+                        o.ringwedges.texnum=o.ringwedges.texnum+o.ringwedges.Ntex;
+                    end
+                end
             end
 
-            if o.Bars.texnum>o.Bars.Ntex
-                o.Bars.texnum=rem(o.Bars.texnum-1,o.Bars.Ntex)+1;
+            if o.ringwedges.texnum>o.ringwedges.Ntex
+                o.ringwedges.texnum=rem(o.ringwedges.texnum-1,o.ringwedges.Ntex)+1;
                 %o.Bars.texnum=o.Bars.texnum-o.Bars.Ntex;
             end
-            
+
 %%
 
             if mod(o.FrameCount, o.updateEveryNFrames)==0
@@ -334,12 +490,12 @@ classdef PR_FixBarRF < handle
 
                 %Update bars
                 if o.GazeContingent
-                    o.Bars.position = [o.S.centerPix(1)+x, o.S.centerPix(2)+y];
+                    o.ringwedges.position = [o.S.centerPix(1)+x, o.S.centerPix(2)+y];
                 end
             end
 
             
-            o.NoiseHistory(o.FrameCount,:) = [NaN,o.Bars.position,o.Bars.texnum];
+            o.NoiseHistory(o.FrameCount,:) = [NaN,o.ringwedges.position,o.ringwedges.phase,o.ringwedges.texnum];
             %*********************
  
         end
@@ -422,21 +578,23 @@ classdef PR_FixBarRF < handle
             case 2    % Displaying stim
                 
 
-                o.Bars.beforeFrame();
+                o.ringwedges.beforeFrame();
                 o.hFix.beforeFrame(3); %Continue showing the black fixation dot?
 
                     if o.FrameCount>0
                     %Params for saving
-                      o.ProbeHistory(o.FrameCount,1) = o.Bars.position(1);
-                       o.ProbeHistory(o.FrameCount,2) = o.Bars.position(2);
-                       o.ProbeHistory(o.FrameCount,3) = o.Bars.prefori;
-                       o.ProbeHistory(o.FrameCount,5) = o.Bars.texnum;
+                      o.ProbeHistory(o.FrameCount,1) = o.ringwedges.position(1);
+                       o.ProbeHistory(o.FrameCount,2) = o.ringwedges.position(2);
+                       if(~isempty(o.ringwedges.texnum))
+                       %o.ProbeHistory(o.FrameCount,3) = o.ringwedges.prefori;
+                       o.ProbeHistory(o.FrameCount,5) = o.ringwedges.texnum;
+                       end
                        
                        %Save the barcode (could get big, ideally wouldn't need to)
                        %Won't allow for size change during presentation, could
                        %change this to cell but there will be an overhead
-                       o.BarHistory{o.FrameCount} =o.Bars.saveline(o.Bars.texnum,:);
-                       %o.TexHistory(o.PFrameCount,:,:)=o.Bars.savesquare(:,:,o.Bars.texnum);
+                       %o.RetHistory{o.FrameCount} =o.ringwedges.saveline(o.ringwedges.texnum,:);
+                       %o.TexHistory(o.PFrameCount,:,:)=o.ringwedges.savesquare(:,:,o.ringwedges.texnum);
                     end
 
             case 3
@@ -452,7 +610,7 @@ classdef PR_FixBarRF < handle
 %                           o.ProbeHistory(o.FrameCount,3) = -1;   %indicates face
 %                           o.ProbeHistory(o.FrameCount,5) = o.Faces.imagenum; %face texture number
 %             
-%                           o.BarHistory{o.FrameCount} = NaN;
+%                           o.RetHistory{o.FrameCount} = NaN;
 %                       end
                     end
                 end
@@ -466,7 +624,7 @@ classdef PR_FixBarRF < handle
                         o.ProbeHistory(o.FrameCount,3) = -2;  % indicate fixation          
                         o.ProbeHistory(o.FrameCount,5) = NaN;
                         
-                        o.BarHistory{o.FrameCount} = NaN;
+                        o.RetHistory{o.FrameCount} = NaN;
                     end
                 end
 
@@ -480,7 +638,7 @@ classdef PR_FixBarRF < handle
         end
         %**************************************************************
 
-%         %% PHOTODIODE FLASH, move to frame control/ output(?)
+       %         %% PHOTODIODE FLASH, move to frame control/ output(?)
 %         This is gross, this is why we have independant outputs
 %         %DPR - 5/5/2023
         if isfield(o.S,'photodiode')
@@ -553,12 +711,12 @@ classdef PR_FixBarRF < handle
         if o.FrameCount == 0
             PR.NoiseHistory = [];
             PR.ProbeHistory = [];
-            PR.BarHistory = [];
+            PR.RetHistory = [];
             %PR.TexHistory = [];
         else
             PR.NoiseHistory = o.NoiseHistory(1:o.FrameCount,:);
             PR.ProbeHistory = o.ProbeHistory(1:o.FrameCount,:);
-            PR.BarHistory = o.BarHistory;%{1:o.FrameCount};
+            PR.RetHistory = o.RetHistory;%{1:o.FrameCount};
             %PR.TexHistory= o.TexHistory(1:o.FrameCount,:,:);
         end
     

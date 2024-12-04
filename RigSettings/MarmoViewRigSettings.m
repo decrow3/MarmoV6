@@ -231,7 +231,7 @@ switch RigName
 
         S.gamma = 1;
         S.screenDistance = 57;              % Distance of eye to screen (cm)
-        S.screenWidth = 30;                 % Width of screen (cm), spoof 30deg
+        S.screenWidth = 20;                 % Width of screen (cm), spoof 20deg
         S.pixPerDeg = PixPerDeg(S.screenDistance,S.screenWidth,S.screenRect(3));
         S.treadmill_dummy.type = 'none';
         S.treadmill_dummy.rewardDist = 5;

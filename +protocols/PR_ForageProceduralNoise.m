@@ -85,7 +85,7 @@ classdef PR_ForageProceduralNoise < protocols.protocol
            o.hProbe{kk} = stimuli.grating(o.winPtr);  % grating probe
            o.hProbe{kk}.transparent = -P.probecon;  % blend in proportion to gauss
            o.hProbe{kk}.gauss = true;
-           o.hProbe{kk}.pixperdeg = S.pixPerDeg;
+           o.hProbe{kk}.pixPerDeg = S.pixPerDeg;
            o.hProbe{kk}.radius = round(P.proberadius*S.pixPerDeg);
           
            o.hProbe{kk}.range = P.proberange;
@@ -297,6 +297,35 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                     'randomizePhase', false); % DO NOT RANDOMISE PHASE
               % o.hNoise.updateEveryNFrames = ceil(S.frameRate / P.noiseFrameRate);
                o.hNoise.updateTextures(); % create the procedural texture
+
+           case 9 % Drifting grating background but with independant SF/TF
+        
+               o.NoiseHistory = nan(o.MaxFrame,7); % time, orientation, cpd, phase, direction, TF, contrast
+               
+               % position
+               x = P.GratCtrX*S.pixPerDeg + S.centerPix(1);
+               y = -P.GratCtrY*S.pixPerDeg + S.centerPix(2);
+               
+               % noise object is created here
+               o.hNoise = stimuli.grating_drifting_TFs(o.winPtr, ...
+                    'numDirections', P.numDir, ...
+                    'minSF', P.GratSFmin, ...
+                    'numOctaves', P.GratNumOct, ...
+                    'pixPerDeg', S.pixPerDeg, ...
+                    'frameRate', S.frameRate, ...
+                    'minTF', P.GratTFmin, ...
+                    'nTFs',  P.nTFs, ...
+                    'position', [x y], ...
+                    'screenRect', S.screenRect, ...
+                    'diameter', P.GratDiameter, ...
+                    'durationOn', P.GratDurOn, ...
+                    'durationOff', P.GratDurOff, ...
+                    'isiJitter', P.GratISIjit, ...
+                    'contrasts', P.GratCon, ...
+                    'randomizePhase', P.RandPhase);
+                
+               o.hNoise.updateTextures(); % create the procedural texture
+
                
        end
        %**********************************************************
@@ -597,8 +626,30 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                          
                          % time, orientation, cpd, phase, direction, speed, contrast
                      end
+
+                 case 9 % drifting gratings with indep TF
                      
+                     o.hNoise.afterFrame(); % update parameters
+                     if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                         o.hNoise.beforeFrame(); % draw
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                         o.hNoise.beforeFrame(); % draw
+                     else
+                        o.hNoise.beforeFrame(); % draw
+                     end
+                     %**********
+                     o.FrameCount = o.FrameCount + 1;
+                     % NOTE: store screen time in "continue_run_trial" after flip
+                     o.NoiseHistory(o.FrameCount,2) = o.hNoise.orientation;  % store orientation
+                     o.NoiseHistory(o.FrameCount,3) = o.hNoise.cpd;  % store spatialfrequency
+                     o.NoiseHistory(o.FrameCount,4) = o.hNoise.phase;
+                     o.NoiseHistory(o.FrameCount,5) = o.hNoise.orientation-90;
+                     o.NoiseHistory(o.FrameCount,6) = o.hNoise.tf;
+                     o.NoiseHistory(o.FrameCount,7) = o.hNoise.contrast;
                      
+                     % time, orientation, cpd, phase, direction, speed, contrast
+
              end
             %****************
          end

@@ -240,7 +240,7 @@ classdef PR_IBLContrastGabor < handle
     
     
     %******************** THIS IS THE BIG FUNCTION *************
-    function drop = state_and_screen_update(o,currentTime,x,y,inputs);
+    function drop = state_and_screen_update(o,currentTime,x,y,inputs,~);
         drop = 0;
 
      
