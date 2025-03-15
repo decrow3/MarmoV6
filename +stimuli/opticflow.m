@@ -41,6 +41,7 @@ classdef opticflow < stimuli.stimulus
     % framecount to give dots a lifetime?
     frameCnt double;
     lifetime double = Inf;
+    centerDecay logical = true; %flag to cull central dots
 
     % cartessian coordinates (relative to center of screen/aperture?)
     x; % x coords (pixels) (nDots, 1)
@@ -51,12 +52,14 @@ classdef opticflow < stimuli.stimulus
     dx; % pixels per frame?
     dy; % pixels per frame?
 
+    %speeds
+    fs;
+    zs;
   end
         
   properties (Access = private)
     winPtr; % ptb window
-    fs
-    zs
+
   end
   
   methods (Access = public)
@@ -220,21 +223,25 @@ classdef opticflow < stimuli.stimulus
            tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < .5*o.size;
            indclose1=find(tooclose);
            
-           % Start culling further out
-            tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < 1.5*o.size;
-           indclose2=find(tooclose); %remove 1/15
-           indclose2=indclose2(1:5:end);
-
-           tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < 2.5*o.size;
-           indclose3=find(tooclose); %remove 1/15
-           indclose3=indclose3(1:15:end);
-
-           tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < 5*o.size;
-           indclose4=find(tooclose);%remove 1/30
-           indclose4=indclose4(1:30:end);
-
-           indcloseall = unique([indclose1; indclose2; indclose3; indclose4]);
-           o.initDots(union(find(iireplace),indcloseall));
+           if o.centerDecay
+               % Start culling further out
+                tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < 1.5*o.size;
+               indclose2=find(tooclose); %remove 1/15
+               indclose2=indclose2(1:5:end);
+    
+               tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < 2.5*o.size;
+               indclose3=find(tooclose); %remove 1/15
+               indclose3=indclose3(1:15:end);
+    
+               tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < 5*o.size;
+               indclose4=find(tooclose);%remove 1/30
+               indclose4=indclose4(1:30:end);
+    
+               indcloseall = unique([indclose1; indclose2; indclose3; indclose4]);
+               o.initDots(union(find(iireplace),indcloseall));
+           else
+               o.initDots(union(find(iireplace),indclose1));
+           end
 
           %***********
       else

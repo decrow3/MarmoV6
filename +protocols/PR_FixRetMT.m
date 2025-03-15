@@ -1,8 +1,17 @@
-classdef PR_FixRetRF < handle
+classdef PR_FixRetMT < handle
   % Matlab class for running an experimental protocl
   %
   % The class constructor can be called with a range of arguments:
   % TODO: ADD DRIFTING DOTS CARRIER
+  % WEDGES FOR MT, FULL SCREEN DOTS, stationary except dots within wedges move
+  % Steps, remove bar/wedges code. Not going to be useful for this
+  %        replace with full screen expanding dot flow field- with Fix
+  %        then generate wedge for carrier, each trial has a different
+  %        location. Dots everywhere get updated each frame but on those in
+  %        the wedges have a nonzero speed
+
+  %     Change optic flow to set speed?
+  %     Don't remove dots between trials????
   
   properties (Access = public) 
        Iti double = 1;            % default Iti duration
@@ -14,6 +23,7 @@ classdef PR_FixRetRF < handle
        showFix logical = true;    % trial start with fixation
        flashCounter double = 0;   % counter to flash fixation
        rewardCount double = 0;    % counter for reward drops
+       trialCount double = 0;     % counter for trials
        RunFixBreakSound double = 0;       % variable to initiate fix break sound (only once)
        NeverBreakSoundTwice double = 0;   % other variable for fix break sound
        BlackFixation double = 6;          % frame to see black fixation, before reward
@@ -31,8 +41,18 @@ classdef PR_FixRetRF < handle
     S;      % copy of Settings struct (loaded per trial start)
     P;      % copy of Params struct (loaded per trial)
     %********* stimulus structs for use
+    hProbe;
     Bars;
     ringwedges;
+
+    %Ret mapping envelope
+    radiilist;
+    anglist;
+    radiilist_full;
+    anglist_full;
+    RetRad;
+    RetAng;
+    
     Faces;             % object that stores face images for use
     hFix;              % object for a fixation point
     fixbreak_sound;    % audio of fix break sound
@@ -77,7 +97,7 @@ classdef PR_FixRetRF < handle
   end
   
   methods (Access = public)
-    function o = PR_FixRetRF(winPtr)
+    function o = PR_FixRetMT(winPtr)
       o.winPtr = winPtr;     
       o.trialsList = [];  % should be set by generate call
     end
@@ -88,17 +108,16 @@ classdef PR_FixRetRF < handle
     
     function initFunc(o,S,P)
         %********** Set-up for trial indexing (required) 
-       cors = [0,4];  % count these errors as correct trials
-       reps = [1,2];  % count these errors like aborts, repeat
-       o.trialsList = [];  % empty for this protocol
+        o.trialCount=0;
+       %o.trialsList = [];  % empty for this protocol
+       %generate_trialsList(o,S,P) % This gets called in the main marmoview
+       %run loop
        %**********
       
        %Fill in some hidden parameters
        P.fixRadius      = P.Radius;
        P.faceradius     = P.Radius;
        P.proberadius    = P.Radius;       
-       
-   
        
        %******* init Noise History with MaxDuration **************
        o.ProbeHistory = zeros(o.MaxFrame,6);  % x,y,ori,fixated,texture, sparsity
@@ -111,33 +130,12 @@ classdef PR_FixRetRF < handle
        o.Faces.imagenum = 1;  % start first face
        o.Faces.transparency = -1;  % blend into background
        
-        
-       %Would probably be better to set up these three conditions in the
-%        %trialList 
-%        %***** create a set of 1D noise textures to move around as probe
-%        o.Bars = stimuli.barRFs(o.winPtr,'bkgd',S.bgColour,'gray',false); % 1D noise as probe
-%        %o.Bars.prctgray = 33.33;
-%        o.Bars.sparsity = 0;
-%        o.Bars.contrast = P.probecon;
-%        o.Bars.texnum   = 1;
-%        o.Bars.barwidth  = round(P.barwidth*S.pixPerDeg);
-%        o.Bars.pxradius   = round(P.proberadius*S.pixPerDeg);
-%        %o.Bars.prefori   = P.prefori;
-%        o.Bars.pixPerDeg = S.pixPerDeg;
-%        
-%        o.Bars.makeTex();
-%        o.Bars.position = [0,0]*S.pixPerDeg + S.centerPix;
-       
-  
-      
        o.FixTime = 0;
        o.oriNum = P.orinum;
 %        o.prefori= P.prefori;
        o.targOri = 1;
        
 
-
-   
         %******* create fixation point ****************
         o.hFix = stimuli.fixation(o.winPtr);   % fixation stimulus
         % set fixation point properties
@@ -161,133 +159,191 @@ classdef PR_FixRetRF < handle
         %*********************
 
 
-        %********* parameters for wedges ***********
-        %Just get wedges working
-        o.ringwedges=stimuli.ringwedges(o.winPtr);%,'bkgd',S.bgColour,'gray',false);
-       o.ringwedges.stim='wedge';
-       %o.ringwedges.wedgeWidth=1;
-       %o.ringwedges.nAng=1;
-       %o.ringwedges.innerRad=0.1;
-       %o.ringwedges.stimSize=5;
+        %********* parameters for optic flow ***********
+        o.hProbe = stimuli.opticflow(o.winPtr); % optic flow
 
-       %o.ringwedges.stimCtr=[0,0];
+        %Optic flow
+        o.hProbe(1).position = [(S.centerPix(1) + round(P.xDeg*S.pixPerDeg)),(S.centerPix(2) - round(P.yDeg*S.pixPerDeg))];
+        o.hProbe(1).f= 0.100; %0.01
+        o.hProbe(1).depth= 10; %2
+        o.hProbe(1).size= (S.pixPerDeg/P.cpd)/2; %half a cycle (in pixels)
+        o.hProbe(1).vxyz= [0 0 .25];
+        o.hProbe(1).nDots= 500;
+        o.hProbe(1).transparent= 0.5000;
+        o.hProbe(1).pixperdeg= S.pixPerDeg;
+        o.hProbe(1).screenRect= S.screenRect;
+        o.hProbe(1).colour= 128+127.*(sign(rand(o.hProbe(1).nDots,1)-0.5).*[1 1 1])';
+        o.hProbe(1).bkgd= 127;
+        o.hProbe(1).maxRadius= inf;
+        o.hProbe(1).lifetime= 120;
+        o.hProbe(1).centerDecay= false;
+        o.hProbe(1).Xtop=  S.screenRect(3);
+        o.hProbe(1).Xbot=  S.screenRect(1);
+        o.hProbe(1).Ytop=  S.screenRect(2);
+        o.hProbe(1).Ybot=  S.screenRect(4);
 
-       %o.ringwedges.pos=[0,0];
-       %o.ringwedges.motionSteps=5;
-       %o.ringwedges.nRad=5;
-       %o.ringwedges.period =1;
-       %o.ringwedges.tf =2;
-
-       %o.ringwedges.srcRect=S.screenRect;
-       %o.ringwedges.destRect=S.screenRect;
-       
-       o.ringwedges.sparsity = 0;
-       o.ringwedges.contrast = 80;
-       o.ringwedges.texnum   = 1;
-       o.ringwedges.barwidth  = round(2*S.pixPerDeg);
-       o.ringwedges.pxradius   = round(P.proberadius*S.pixPerDeg);
-       %o.ringwedges.prefori   = P.prefori;
-       o.ringwedges.pixPerDeg = S.pixPerDeg;
-       o.ringwedges.displayctr=S.centerPix;
-
-       %TODO, need to move these to settings
-        %Add phase min and max, number of increments
-
-        %Parameters for the polar checkboard carrier
-
-        %Parameters for the moving envelope
-
-
-        % %Intervals for increments of phase of polar angle of center of wedges
-        phinc       = pi/8;%pi/24;
-        wedgeWidth  = phinc;%1.5*phinc;
-        %Angular width of wedges is o.wedgeWidth/o.nAng;
-        fixRadius = .5;
-        
-        %% Some of the following can just be left as defaults in ringwedges
-        % Starting phases, clockwise from leftward=0, pi/2 (5pi/2) = up, pi= right, 3*pi/2 down
-            subwedperwed=2;% subwedges are offcentered by .5
-            
-            o.ringwedges.wedgeWidth = subwedperwed;       %number of sub-wedges in a wedge  
-            o.ringwedges.nAng = subwedperwed*2*pi/(wedgeWidth);%42;%12;        % number of sub-wedges in a circle *2    
-           
-            %o.ringwedges.stimSize = 20; % Radius in visual angle
-            o.ringwedges.innerRad = fixRadius; 
-            o.ringwedges.nRad = 12;%24;            % number of sub-rings in a circle * 2
-            o.ringwedges.nBar = 5;             % number of bars in the square * 2
-               
-            o.ringwedges.ringWidth = 1;        %number of sub-rings in a ring (has to be odd)
-            o.ringwedges.barWidth = .8;
-            o.ringwedges.fixSize = 10;         %fixation point size
-            o.ringwedges.junkFrames = 8;             %junk before stimulus in seconds
-            o.ringwedges.meriThick = 1/10;     %what proportion of circle is a wedge for the meridian 
-            o.ringwedges.meriStart= 'horizontal'; %which to start with: horizontal or vertical
-            o.ringwedges.motionSteps = 8;
-
-            %Bottom left quadrant, little bit of overlap on vertical
-            %meridian
-            o.ringwedges.minphase = pi/2-pi/12;
-            o.ringwedges.maxphase = pi - pi/12;
-
-            %Envelope
-            switch o.ringwedges.stim
-                case 'full-field'
-                    o.ringwedges.tf = 8;               %Hz
-                    o.ringwedges.stimPeriod = 1.5;
-                    o.ringwedges.period = 30; % 24 sec (32 frames at .75 s TR)
-                    o.ringwedges.nCycles = 6; % 24 x 6 = 180 (3 min) 240 frames at .75 s TR
-                case 'bar'
-                    o.ringwedges.tf = 12;               %Hz
-                    o.ringwedges.period = 15;          %seconds in entire cycle as in both orientations
-                    o.ringwedges.nCycles = size(o.ringwedges.orientationSequences,1);%11; % 8 orientations and 4 blanks 15x12 = 180 (3 min) 240 frames at .75 s TR
-                otherwise
-                    o.ringwedges.tf = 8;               %Hz
-                    o.ringwedges.period = 15;%100          %seconds in entire cycle as in both orientations
-                    o.ringwedges.nCycles = 1; % 18x12 = 216 (3.6 min) 288 volumes at .75 s TR
-            end
-            
-      
-            switch o.ringwedges.stim
-                case 'ring'
-                    o.ringwedges.startPhase = .5*o.ringwedges.ringWidth/o.ringwedges.nRad;
-                case 'wedge'
-                    o.ringwedges.startPhase = 0;%.25*pi;%.25; %.5*o.ringwedges.wedgeWidth/o.ringwedges.nAng; %.25 - 
-                case 'meridian' 
-                    if o.ringwedges.meriStart=='horizontal' %#ok<STCMP>
-                        o.ringwedges.startPhase = .5;
-                    else
-                        o.ringwedges.startPhase = 0;
-                    end
-                otherwise
-                    o.ringwedges.nOrientations = 8;
-                    o.ringwedges.startPhase = 0;
-            end
-            
-        
-            o.ringwedges.pos = [0 0]';
-            o.ringwedges.stimCtr = [0 0 0];[960, 540, 0]; 
-            ncopies = 1;
-            o.ringwedges.isi = 0; % blank interstimulus interval between each matrix module
-   
-            
-            %Initialise but should be really be updated in trialprep 
-       
-
-
-            %o.ringwedges.startPhase=0;
-            %o.ringwedges.Reverse=0;
-           o.ringwedges.makeTex();
-           o.ringwedges.position = [0,0]*S.pixPerDeg + S.centerPix;
-            %%
+        %Begins the dots before the trial begins
+        o.hProbe(1).beforeTrial();
+        %%
     end
    
+    function updatedots(o,~,~,~)
+        % already done, o.FrameCount = o.FrameCount + 1;   
+
+        % Update positions -> optic flow
+%         Ax = [o.hProbe.fs o.hProbe.zs o.hProbe.x-o.hProbe.position(1)];
+%         Ay = [o.hProbe.zs o.hProbe.fs o.hProbe.y-o.hProbe.position(2)];
+%         o.hProbe.dx = Ax*o.hProbe.vxyz'./o.hProbe.z;
+%         o.hProbe.dy = Ay*o.hProbe.vxyz'./o.hProbe.z;
+    
+        % Polar from center (direction to move)
+        pang=atan2((o.hProbe.y-o.hProbe.position(2)),(o.hProbe.x-o.hProbe.position(1)));
+        speed=8; %REPLACE WITH PARAM
+        o.hProbe.dx = speed.*cos(pang);
+        o.hProbe.dy = speed.*sin(pang);
+    
+       
+
+        %set size of envelope
+        Wedgerad=mode(diff(o.radiilist));
+        Wedgeang=mode(diff(o.anglist));
+
+        dotx=(o.hProbe.x-o.S.centerPix(1))/o.S.pixPerDeg; % x coords (pixels) (nDots, 1)
+        doty=(o.hProbe.y-o.S.centerPix(2))/o.S.pixPerDeg; % y coords (pixels)
+        [dotTH,dotR] = cart2pol(dotx,doty);
+        %east is 0, south is pi/2, north is p/2, west is +-pi
+        dotTH=180*dotTH/pi + 90; dotTH(dotTH<0)=360+dotTH(dotTH<0);
+        %north is 0 and 360, east is 90, south is 180, west is 270
+        lowerRad=o.RetRad-Wedgerad/2;
+        upperRad=o.RetRad+Wedgerad/2;
+
+        lowerAng=o.RetAng-Wedgeang/2; lowerAng(lowerAng<0)=360+lowerAng(lowerAng<0);
+        upperAng=o.RetAng+Wedgeang/2; upperAng(upperAng<0)=360+upperAng(upperAng<0);
+        
+        if lowerAng<upperAng
+            keepdots=(dotTH>lowerAng)&(dotTH<upperAng)&(dotR>lowerRad)&(dotR<upperRad);
+        else
+            keepdots=((dotTH>lowerAng)|(dotTH<upperAng))&(dotR>lowerRad)&(dotR<upperRad);
+        end
+        freezedots=~keepdots;
+
+
+        %Remove dx dy from out of wedge
+        % If we set the speed zero at start of trial, rather than each
+        % frame it will probably be more efficient? No, dots would move out
+        % of window. Note we need to respawn some in too
+                % Here goes the wedges envelope
+                % Check dots positions
+    
+        o.hProbe.dx(freezedots)=0; % 
+        o.hProbe.dy(freezedots)=0; % 
+
+         % decrement frame counters
+        o.hProbe.frameCnt(~freezedots) = o.hProbe.frameCnt(~freezedots) - 1;
+    
+
+      % calculate future position
+      x_ = o.hProbe.x(keepdots) + o.hProbe.dx(keepdots);
+      y_ = o.hProbe.y(keepdots) + o.hProbe.dy(keepdots);
+
+      %if they exit the aperture, redraw inside
+      dotx_=(x_-o.S.centerPix(1))/o.S.pixPerDeg; % x coords (deg) (nDots, 1)
+      doty_=(y_-o.S.centerPix(2))/o.S.pixPerDeg; % y coords (deg)
+      [dotTH_,dotR_] = cart2pol(dotx_,doty_);
+      dotTH_=180*dotTH_/pi + 90;  dotTH_(dotTH_<0)=360+dotTH_(dotTH_<0);
+
+      if lowerAng<upperAng
+        outdots=(dotTH_<=lowerAng)|(dotTH_>=upperAng)|(dotR_<=lowerRad)|(dotR_>=upperRad)|(o.hProbe.frameCnt(keepdots)<1); %a subset of keepdots that move out of the aperture
+      else
+        outdots=((dotTH_<=lowerAng)&(dotTH_>=upperAng))|(dotR_<=lowerRad)|(dotR_>=upperRad)|(o.hProbe.frameCnt(keepdots)<1); %a subset of keepdots that move out of the aperture
+      end
+      
+      % Also check if they go out of bounds
+      if isinf(o.hProbe.maxRadius)
+          ireplace = (x_ > o.hProbe.Xtop) | (x_ < o.hProbe.Xbot) | (y_ < o.hProbe.Ytop) | (y_ > o.hProbe.Ybot) ; %Leaving Y inverted for now 
+      else
+          r = sqrt(x_.^2 + y_.^2);
+         ireplace = (r > o.hProbe.maxRadius); % dots that have exited the aperture  
+      end
+      outdots=outdots|ireplace;
+
+      iid_keep=find(keepdots);iid_outdots=iid_keep(outdots);
+      nout=numel(iid_outdots);
+
+        %Respawn dots inside wedge
+        randang=o.RetAng+1*(rand(nout,1)-0.5)*Wedgeang;
+
+        %Need to check if hitting the edge is possible at current angle, far points at min and max angle
+        testmax1_th=o.RetAng-0.5*Wedgeang;
+        testmax2_th=o.RetAng+0.5*Wedgeang;
+        [testmax1_x,testmax1_y]=pol2cart(pi*(testmax1_th-90)/180,o.RetRad+0.5*Wedgerad); %in degrees
+        [testmax2_x,testmax2_y]=pol2cart(pi*(testmax2_th-90)/180,o.RetRad+0.5*Wedgerad); %in degrees
+
+        testmax1_x=testmax1_x*o.S.pixPerDeg + o.S.centerPix(1);
+        testmax2_x=testmax2_x*o.S.pixPerDeg + o.S.centerPix(1);
+        testmax1_y=testmax1_y*o.S.pixPerDeg + o.S.centerPix(2);
+        testmax2_y=testmax2_y*o.S.pixPerDeg + o.S.centerPix(2);
+
+        itest1 = (testmax1_x > o.hProbe.Xtop) | (testmax1_x < o.hProbe.Xbot) | (testmax1_y < o.hProbe.Ytop) | (testmax1_y > o.hProbe.Ybot) ; %Leaving Y inverted for now 
+        itest2 = (testmax2_x > o.hProbe.Xtop) | (testmax2_x < o.hProbe.Xbot) | (testmax2_y < o.hProbe.Ytop) | (testmax2_y > o.hProbe.Ybot) ; %Leaving Y inverted for now 
+        
+        if sum(ireplace)>0||itest1||itest2 %hitting edge of screen, limit rad. 
+            maxrad=min([o.hProbe.Xtop-o.hProbe.Xbot o.hProbe.Ybot-o.hProbe.Ytop])/(2*o.S.pixPerDeg); %closest screen border
+            minrad=o.RetRad-0.5*Wedgerad;
+            randrad = minrad+rand(nout,1).*(maxrad-minrad);
+        else
+            randrad=o.RetRad+1*(rand(nout,1)-0.5)*Wedgerad;
+        end
+        [outdotx,outdoty]=pol2cart(pi*(randang-90)/180,randrad); %in degrees
+        o.hProbe.x(iid_outdots)=outdotx*o.S.pixPerDeg+o.S.centerPix(1);
+        o.hProbe.y(iid_outdots)=outdoty*o.S.pixPerDeg+o.S.centerPix(2);
+        
+
+        %don't move these dots on first frame
+        o.hProbe.dx(iid_outdots)=0; % 
+        o.hProbe.dy(iid_outdots)=0; % 
+
+        %give new dots a new lifetime
+        o.hProbe.frameCnt(iid_outdots) = o.hProbe.lifetime; % default: Inf
+
+        o.hProbe.moveDots();
+        o.hProbe.beforeFrame(); %draws dots
+
+         % NOTE: store screen time in "continue_run_trial" after flip, time
+         % when stimuli actually appears
+        o.ProbeHistory(o.FrameCount,2) = o.hProbe.position(1);  
+        o.ProbeHistory(o.FrameCount,3) = o.hProbe.position(2); 
+
+    end
+
+
     function closeFunc(o)
-        o.ringwedges.CloseUp();
+        %o.hProbe.CloseUp();
         o.hFix.CloseUp();
     end
    
     function generate_trialsList(o,S,P)
            % nothing for this protocol
+           % Radii and angles
+           
+           o.radiilist=3:3:9;
+           o.anglist=0:45:315;
+           nang=length(o.anglist);
+           nrad=length(o.radiilist);
+           o.radiilist_full=repmat(o.radiilist,nang,1)';
+           o.anglist_full=repmat(o.anglist,nrad,1);
+
+           comb=nang*nrad;%length(o.radiilist)*length(o.anglist);
+           %Allocate and pseudorandomise trials
+           reps=ceil(S.finish/comb);
+           
+            disp(['For maximum full repeats stop at trial: ' num2str(comb*floor(S.finish/comb))]);
+
+           List=nan(comb,reps);
+           for ii=1:reps
+                List(:,ii) = randperm(comb);
+           end
+           o.trialsList=List(:);
     end
     
     function P = next_trial(o,S,P)
@@ -295,18 +351,18 @@ classdef PR_FixRetRF < handle
           o.S = S;
           o.P = P;      
           o.FrameCount = 0;   % for noise history
+          o.trialCount = o.trialCount+1;
 
-          o.StartTex=randi(o.ringwedges.Ntex,1);
-          o.Reverse=round(rand(o.ringwedges.rng,1)+eps);
+          % Initialising here generates a new optic flow stimulus per trial, prohibiting
+          % keeping the dots onscreen between trials. Moved to init
+            
+
+            o.RetRad= o.radiilist_full(o.trialsList(o.trialCount));
+            o.RetAng= o.anglist_full(o.trialsList(o.trialCount));
+
+%           o.StartTex=randi(o.ringwedges.Ntex,1);
+%           o.Reverse=round(rand(o.ringwedges.rng,1)+eps);
 % 
-%           %TODO, at beginning of trial
-%           %Initialise random startphase, increments
-%           phase_step= randi(o.ringwedges.rng, o.ringwedges.Ntex)./o.ringwedges.Ntex;
-%           o.ringwedges.startTex=o.ringwedges.minphase+ ...
-%               (o.ringwedges.maxphase-o.ringwedges.minphase)*phase_step;
-%           %Randomise direction for motion (CW/CCW)
-%           Reverse=round(rand(o.ringwedges.rng,1)+eps);
-%           o.ringwedges.reverse=reverse;
 
           %*******************
         
@@ -425,87 +481,28 @@ classdef PR_FixRetRF < handle
         end
     
         %%%%% STATE 2 -- HOLD FIXATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        if o.state == 2    % show flashing stimuli at random points each frame
-            %***pick a random screen location but not overlapping fixation
-            ampo = o.P.gabMinRadius + (o.P.gabMaxRadius-o.P.gabMinRadius)*rand;
-            ango = rand*2*pi;
-            dx = cos(ango)*ampo;
-            dy = sin(ango)*ampo;
-            cX = o.S.centerPix(1)+ round( o.S.pixPerDeg * dx);
-            cY = o.S.centerPix(2)+ round( o.S.pixPerDeg * dy);   %
-            %****** update one of the Gabor's locations
-            %****** store starting locations, set time as NaN
+        if o.state == 2    % show stimuli while fixation is maintained
             o.FrameCount = o.FrameCount + 1;
             o.PFrameCount = o.FrameCount;
-
-%             %%  %updating bars
-%             kk = ~mod(o.PFrameCount, o.nFramesPerStim);
-%             
-%             if isempty(o.Bars.texnum)
-%                 o.Bars.texnum  = randi(o.Bars.rng, o.Bars.Ntex);
-%                 o.Bars.orinum  = randi(o.Bars.rng, length(o.P.orilist));
-%                 o.Bars.prefori = o.P.prefori(o.Bars.orinum);
-%             elseif kk %update
-%                 o.Bars.texnum  = randi(o.Bars.rng, o.Bars.Ntex);  %o.StartTex + kk;%o.Bars.texnum +1; %randi(o.Bars.rng, o.Bars.Ntex);  
-%                 o.Bars.orinum  = randi(o.Bars.rng, length(o.P.orilist));
-%                 o.Bars.prefori = o.P.orilist(o.Bars.orinum);
-%             end
-% 
-%             if o.Bars.texnum>o.Bars.Ntex
-%                 o.Bars.texnum=rem(o.Bars.texnum-1,o.Bars.Ntex)+1;
-%                 %o.Bars.texnum=o.Bars.texnum-o.Bars.Ntex;
-%             end
-
-            %% Update rings/wedges, just increment???
-            kk = ~mod(o.PFrameCount, o.nFramesPerStim);
-            
-            if isempty(o.ringwedges.texnum)
-                o.ringwedges.texnum  = o.startTex;%randi(o.ringwedges.rng, o.ringwedges.Ntex);%
-                o.ringwedges.orinum  = randi(o.ringwedges.rng, length(o.P.orilist));
-                o.ringwedges.prefori = o.P.prefori(o.ringwedges.orinum);
-            elseif kk %update
-                if o.Reverse <1 
-                   o.ringwedges.texnum  = o.ringwedges.texnum +1; %randi(o.Bars.rng, o.Bars.Ntex);  %o.StartTex + kk;%o.Bars.texnum +1; %randi(o.Bars.rng, o.Bars.Ntex);  
-                else
-                    o.ringwedges.texnum  = o.ringwedges.texnum -1;
-                    if o.ringwedges.texnum<1
-                        o.ringwedges.texnum=o.ringwedges.texnum+o.ringwedges.Ntex;
-                    end
-                end
-            end
-
-            if o.ringwedges.texnum>o.ringwedges.Ntex
-                o.ringwedges.texnum=rem(o.ringwedges.texnum-1,o.ringwedges.Ntex)+1;
-                %o.Bars.texnum=o.Bars.texnum-o.Bars.Ntex;
-            end
-
 %%
-
             if mod(o.FrameCount, o.updateEveryNFrames)==0
                 o.ImCounter = o.ImCounter + 1;
                 if (o.ImCounter > numel(o.ImSequence))
                     o.ImCounter = 1;
                 end
 %                 o.Faces.imagenum = o.ImSequence(o.ImCounter);
-
-                %Update bars
-                if o.GazeContingent
-                    o.ringwedges.position = [o.S.centerPix(1)+x, o.S.centerPix(2)+y];
-                end
             end
-
-            
-            o.NoiseHistory(o.FrameCount,:) = [NaN,o.ringwedges.position,o.ringwedges.phase,o.ringwedges.texnum];
-            %*********************
  
+            o.NoiseHistory(o.FrameCount,:) = [NaN,o.hProbe.position,o.RetRad,o.RetAng];%[NaN,o.hProbe.position,o.ringwedges.phase,o.ringwedges.texnum];
+            %*********************
         end
     
         % If fixation is held for the fixation duration, then reward
         if o.state == 2 && currentTime > o.fixStart + o.fixDur
             o.state = 3; % Move to iti -- inter-trial interval
             o.itiStart = GetSecs;
-
         end
+
         % Eye must remain in the fixation window
         if o.state == 2 && norm([x y]) > o.P.fixWinRadius
             o.state = 3; % Move to iti -- inter-trial interval
@@ -531,9 +528,28 @@ classdef PR_FixRetRF < handle
            end
         end
     
+        % FIRST DOT DRAW (STATIC)
+        if o.FrameCount==0
+%             o.hProbe.afterFrame();
+            o.hProbe.dx = zeros(size(o.hProbe.dx));
+            o.hProbe.dy = zeros(size(o.hProbe.dy));
+            %o.hProbe.frameCnt = o.hProbe.frameCnt - 1;
+            %o.hProbe.moveDots();
+            o.hProbe.beforeFrame(); %draws dots
+        end
+
+
         % STATE SPECIFIC DRAWS
         switch o.state
             case 0
+                %Still draws dots!
+                % o.hProbe.afterFrame();
+                o.hProbe.dx = zeros(size(o.hProbe.dx));
+                o.hProbe.dy = zeros(size(o.hProbe.dy));
+                %o.hProbe.frameCnt = o.hProbe.frameCnt - 1;
+                %o.hProbe.moveDots();
+                o.hProbe.beforeFrame(); %draws dots
+
                 if o.showFix
                     %if ~o.faceTrial
                          o.hFix.beforeFrame(1);
@@ -564,6 +580,15 @@ classdef PR_FixRetRF < handle
                 end
 
             case 1
+                %Still draws dots!
+                % o.hProbe.afterFrame();
+                o.hProbe.dx = zeros(size(o.hProbe.dx));
+                o.hProbe.dy = zeros(size(o.hProbe.dy));
+                %o.hProbe.frameCnt = o.hProbe.frameCnt - 1;
+                %o.hProbe.moveDots();
+                o.hProbe.beforeFrame(); %draws dots
+
+
                 o.hFix.beforeFrame(1);
                 if o.FrameCount>0
                     %State1, fixation period saving
@@ -577,27 +602,17 @@ classdef PR_FixRetRF < handle
 
             case 2    % Displaying stim
                 
-
-                o.ringwedges.beforeFrame();
-                o.hFix.beforeFrame(3); %Continue showing the black fixation dot?
-
-                    if o.FrameCount>0
-                    %Params for saving
-                      o.ProbeHistory(o.FrameCount,1) = o.ringwedges.position(1);
-                       o.ProbeHistory(o.FrameCount,2) = o.ringwedges.position(2);
-                       if(~isempty(o.ringwedges.texnum))
-                       %o.ProbeHistory(o.FrameCount,3) = o.ringwedges.prefori;
-                       o.ProbeHistory(o.FrameCount,5) = o.ringwedges.texnum;
-                       end
-                       
-                       %Save the barcode (could get big, ideally wouldn't need to)
-                       %Won't allow for size change during presentation, could
-                       %change this to cell but there will be an overhead
-                       %o.RetHistory{o.FrameCount} =o.ringwedges.saveline(o.ringwedges.texnum,:);
-                       %o.TexHistory(o.PFrameCount,:,:)=o.ringwedges.savesquare(:,:,o.ringwedges.texnum);
-                    end
+                %Update to the next position of the probe
+                o.updatedots(x,y,currentTime)
 
             case 3
+                %Still draws dots!
+                % o.hProbe.afterFrame();
+                o.hProbe.dx = zeros(size(o.hProbe.dx));
+                o.hProbe.dy = zeros(size(o.hProbe.dy));
+                %o.hProbe.frameCnt = o.hProbe.frameCnt - 1;
+                %o.hProbe.moveDots();
+                o.hProbe.beforeFrame(); %draws dots
                 if ~o.error
                     if (o.BlackFixation)
                        o.hFix.beforeFrame(3);
@@ -627,8 +642,19 @@ classdef PR_FixRetRF < handle
                         o.RetHistory{o.FrameCount} = NaN;
                     end
                 end
+            case 4
+                %Still draw dots! Even after trial!!
+                % o.hProbe.afterFrame();
+                o.hProbe.dx = zeros(size(o.hProbe.dx));
+                o.hProbe.dy = zeros(size(o.hProbe.dy));
+                %o.hProbe.frameCnt = o.hProbe.frameCnt - 1;
+                %o.hProbe.moveDots();
+                o.hProbe.beforeFrame(); %draws dots
 
-      
+                if isfield(o.S,'photodiode')
+                    Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
+                end
+
         end
 
         %******** if sound, do here

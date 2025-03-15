@@ -53,6 +53,8 @@ classdef FrameControl < matlab.mixin.Copyable & handle
      centerPix = [0,0];
      pixPerDeg = 30; 
      frameRate = 60; 
+     persistence logical = 1; % Flag for whether to keep 
+     scr_gamma double = 1; % For redrawing
   end
 
   methods
@@ -100,6 +102,8 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         o.dy = C.dy;
         %**************
         o.frameRate = S.frameRate;
+        o.scr_gamma = S.gamma;
+        o.persistence = S.persistence; %Flag for holding stimuli on screen between trials
         o.FMAX = ceil(60*o.frameRate); % max trial is 20 seconds, regardless of framerate
         o.centerPix = S.centerPix;
         o.pixPerDeg = S.pixPerDeg;
@@ -189,9 +193,19 @@ classdef FrameControl < matlab.mixin.Copyable & handle
           o.FData(1:o.FCount,1) = GetSecs;  % column 1 timelock on eye pos
           %*************
           
+        %%%%%%%-- MESSING WITH THIS DPR 12/17/2024 to allow
+        %%%%%%%dots to linger between trials
           % Setup first frame
-          Screen('FillRect',o.winPtr,o.Bkgd);
+            if o.persistence ==0
+                Screen('FillRect',o.winPtr,o.Bkgd);
+            else % Keep last screen image (but need to flip for timing)
+                img=Screen('GetImage',o.winPtr);
+                scr_gamma=o.scr_gamma;%2.5554; %hard coding until we can pass this
+                img=255*((255.^-scr_gamma)*double(img(:,:,1)).^scr_gamma);
+                Screen('PutImage', o.winPtr, img);
+            end
           % when flipping, store time in eyeData
+
           [vbl, stimOnset, FlipTimestamp, Missed] = Screen('Flip',o.winPtr,0);
           %***** Get initial into *************
           o.FData(1:o.FCount,2) = eyepos(1);
@@ -316,7 +330,16 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         % Reset the screen and leave blank for ITI
         o.FCount = o.FCount + 1;
         eyeI = o.FCount;
-        Screen('FillRect',o.winPtr,o.Bkgd);
+        %Playing around with trying to keep dots on screen between trials
+        %for MT, not for actual use: 12/17/2024
+        if o.persistence ==0
+            Screen('FillRect',o.winPtr,o.Bkgd);
+        else % Keep last screen image (but need to flip for timing)
+            img=Screen('GetImage',o.winPtr);
+            scr_gamma=o.scr_gamma;%2.5554; %hard coding until we can pass this
+            img=255*((255.^-scr_gamma)*double(img(:,:,1)).^scr_gamma);
+            Screen('PutImage', o.winPtr, img);
+        end
         FEnd = Screen('Flip',o.winPtr,GetSecs);
         o.FData(eyeI,6) = FEnd;
         %******* Store the Clock Sixlet ***********
