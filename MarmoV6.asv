@@ -651,7 +651,10 @@ classdef MarmoV6 < matlab.apps.AppBase
             % This should start recording on the eye trackers / make sure
             % synchronization is ready
             for i = 1:numel(app.inputs)
-                app.inputs{i}.startfile(); %app.A.outputFile
+                app.inputs{i}.startfile(app);
+            end
+            for i=1:length(app.inputs)
+                app.inputs{i}.closefile();
             end
             
 %             % initialize outputs
