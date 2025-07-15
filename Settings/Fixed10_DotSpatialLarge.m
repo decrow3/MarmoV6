@@ -50,7 +50,7 @@ P.CycleBackImage = 5;
 S.CycleBackImage = 'If def, backimage every # trials:';
 
 %******* trial timing and reward
-P.holdDur = 0.10;
+P.holdDur = 0.1;
 S.holdDur = 'Duration at grating for reward (s):';
 P.fixRadius = 2.5;  
 S.fixRadius = 'Probe reward radius(degs):';

@@ -1,5 +1,5 @@
 
-function [S,P] = Static_SummationGratings()
+function [S,P] = Forage_SummationPairs()
 
 %%%% NECESSARY VARIABLES FOR GUI
 %%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -17,7 +17,7 @@ S.MarmoViewVersion = '6';
 S.finish = 1000;
 
 % PROTOCOL PREFIX
-S.protocol = 'FixedProceduralNoise';
+S.protocol = 'ForageProceduralNoise';
 % PROTOCOL PREFIXS
 S.protocol_class = ['protocols.PR_',S.protocol];
 
@@ -110,16 +110,16 @@ P.showEye = 0;
 S.showEye = 'Show the gaze indicator? (0 or 1):';
 
 %***** FORAGE CAN ACCEPT DIFFERENT BACKGROUND TYPES *****
-P.noisetype = 8; % this corresponds to what PR_ForageProceduralNoise does
+P.noisetype = 9; % this corresponds to what PR_ForageProceduralNoise does
 S.noisetype = 'Cannot change during protocol';
 
 switch P.noisetype
         
-    case 8 % drifting gratings
-        P.numDir = 12;
+    case 9 % drifting gratings pairs
+        P.numDir = 1;
         S.numDir = 'Number of directions to draw from:';
 
-        P.numPhase = 4;
+        P.numPhase = 8;
         S.numPhase = 'Number of phases to draw from:';
 
         P.GratSFmin = 0.5;  % will be [0.5 1 2 4 8]
@@ -127,7 +127,7 @@ switch P.noisetype
         
         % Want to use linear spacing to get more harmonics, also this is
         % not really the number of octaves covered, fencepost problem
-        P.GratNumOct = 4;   % using linear span [4 8 12 16 20 24 28 32 36 40 44 48 52 56 60 64];
+        P.GratNumOct = 4;   % 12 frq using linear span [4 8 12 16 20 24 28 32 36 40 44 48 52 56 60 64];
         S.GratNumOct = 'Num Spat Freq Octaves:';
     
         P.GratSpeed = 1;
@@ -142,9 +142,9 @@ switch P.noisetype
         P.GratDiameter = inf;
         S.GratDiameter = 'Grating Diameter (d.v.a., inf = full):';
         
-        P.GratDurOn = 600;
+        P.GratDurOn = 1;
         S.GratDurOn = 'Grating on duration (frames):';
-        
+
         P.GratDurOff = 0;
         S.GratDurOff = 'Grating min ISI duration (frames):';
         

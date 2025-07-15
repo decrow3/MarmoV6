@@ -64,7 +64,7 @@ switch RigName
         % setup screen
         S.monitor = 'ASUS-XG27UQR';         % Monitor used for display window
         S.screenNumber = 1;                % Designates the display for task stimuli
-        S.frameRate = 240;                 % Frame rate of screen in Hz
+        S.frameRate = 60;                 % Frame rate of screen in Hz
         S.screenRect = [0 0 3840 2160];     %  Screen dimensions in pixels
         S.screenWidth = 59.6;                 % Width of screen (cm)
         S.centerPix =  [1920 1080];           % Pixels of center of the screen

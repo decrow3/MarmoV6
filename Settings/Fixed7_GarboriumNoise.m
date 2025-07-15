@@ -1,3 +1,4 @@
+
 function [S,P] = Fixed7_GarboriumNoise()
 
 %%%% NECESSARY VARIABLES FOR GUI
