@@ -120,14 +120,7 @@ classdef PR_FaceCal < handle
         % STATE SPECIFIC DRAWS
         switch o.state
            case 0
-            if isfield(o.S,'stereoMode') && o.S.stereoMode>0
-                Screen('SelectStereoDrawBuffer', o.winPtr, 0);
-                Screen('DrawTextures',o.winPtr,o.texList,o.texRects,o.winRects) 
-                Screen('SelectStereoDrawBuffer', o.winPtr, 1);
-                Screen('DrawTextures',o.winPtr,o.texList,o.texRects,o.winRects) 
-            else
-                Screen('DrawTextures',o.winPtr,o.texList,o.texRects,o.winRects) 
-            end            
+            Screen('DrawTextures',o.winPtr,o.texList,o.texRects,o.winRects)  
         end 
         %**************************************************************
     end

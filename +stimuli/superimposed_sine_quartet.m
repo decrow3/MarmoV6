@@ -35,7 +35,6 @@ classdef superimposed_sine_quartet < stimuli.stimulus
         isiJitter double % amount of jitter to add to the isi (frames)
         position double
         diameter double
-        prefori 
         
         % --- internally used paramters
         tex         % the texture object
@@ -81,17 +80,9 @@ classdef superimposed_sine_quartet < stimuli.stimulus
             ip.addParameter('isiJitter', 5)
             ip.addParameter('screenRect', [])
             ip.addParameter('contrasts', 0.5)
-            
             ip.addParameter('randomizePhase', false)
             
             ip.parse(varargin{:});
-
-            %Need to recenter the orientation dist, even numbers get
-            %centered on prefori so 12 dirs will be -7.5 7.5 22.5 etc
-            if rem(ip.Results.numDirections,2)==0
-                prefori=-90/ip.Results.numDirections; %half a division
-            end
-
             
 
             % Generate stimuli from the grating_drifting_SFlinear class
@@ -111,7 +102,6 @@ classdef superimposed_sine_quartet < stimuli.stimulus
                     'durationOff', ip.Results.durationOff, ...
                     'isiJitter', ip.Results.isiJitter, ...
                     'contrasts', ip.Results.contrasts, ...
-                    'prefori', prefori, ...
                     'randomizePhase', false); % DO NOT RANDOMISE PHASE
             end
 %             % Should each get their own rng

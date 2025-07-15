@@ -39,13 +39,12 @@ classdef eyetrack_OpenIris  < handle
 
         end
 
-        function startfile(o)
-            %o.SetSessionName(sessionName)
+        function startfile(o,~)
             o.StartRecording
             o.Starttime=GetSecs;
         end
         
-        function closefile(o)
+        function closefile(o,~)
             o.StopRecording
             o.Stoptime=GetSecs;
         end
@@ -63,11 +62,11 @@ classdef eyetrack_OpenIris  < handle
         end
 
         function readinput(o,~)
-%             if isempty(o.Eyedata)
+            if isempty(o.Eyedata)
                 o.Eyedata=o.GetCurrentData;
-%             else
-%                 o.Eyedata=[o.Eyedata; o.GetCurrentData];
-%             end
+            else
+                o.Eyedata=[o.Eyedata; o.GetCurrentData];
+            end
         end
 
         function [x,y] = getgaze(o,~)
@@ -109,7 +108,7 @@ classdef eyetrack_OpenIris  < handle
             
             this.ip = ip;
             this.port = port;
-            this.t = udpport("IPV4","Timeout",0.4);
+            this.t = udpport("IPV4");
             
             result = 1;
         end
@@ -125,8 +124,8 @@ classdef eyetrack_OpenIris  < handle
 %         end
 %         
 %         function SetSessionName(this, sessionName)
-%             if ( ~isempty( this.t) )
-%                 this.t.ChangeSetting('SessionName',sessionName);
+%             if ( ~isempty( this.eyeTracker) )
+%                 this.eyeTracker.ChangeSetting('SessionName',sessionName);
 %             end
 %         end
         

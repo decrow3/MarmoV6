@@ -13,6 +13,8 @@ classdef PR_DotsflowReplay < handle
        MaxFrame double = 10*60;
        FlowHistory double = [];
        TrialCount double = 0;
+       %**** Photodiode flash timing
+       Flashtime = [];
   end
       
   properties (Access = private)
@@ -54,7 +56,7 @@ classdef PR_DotsflowReplay < handle
  
          %********** Initialize Graphics Objects
          o.hFlow = stimuli.dotspatialReplay(o.winPtr);   % dots flow stimulus
-         %o.FlowHistory = zeros(o.MaxFrame,3,300);
+         o.FlowHistory = zeros(o.MaxFrame,3,300);
          
     end
    
@@ -131,6 +133,9 @@ classdef PR_DotsflowReplay < handle
         if (o.state < 1) % as the flow finishes its presentation, state turns to 1 from 0
             keepgoing = 1;
         end
+        if (o.FrameCount)
+           o.FlowHistory(o.FrameCount,1,:) = screenTime;  %store screen flip 
+        end
     end
    
     %******************** THIS IS THE BIG FUNCTION *************
@@ -205,7 +210,7 @@ classdef PR_DotsflowReplay < handle
         %************* STORE DATA to PR
         PR = struct;
         PR.error = o.error;
-%         PR.FlowHistory = o.FlowHistory;
+        PR.FlowHistory = o.FlowHistory;
         PR.startTime = o.startTime;
         PR.endTime = o.endTime;
         PR.TrialCount = o.TrialCount;

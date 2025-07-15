@@ -437,10 +437,7 @@ classdef PR_FixedProceduralNoise < protocols.protocol
             % State 0 -- Prep, prestimulus
             % State 1 -- Fixating somewhere on screen
             % State 2 -- Fixation broken (refresh stimuli)
-            % State 5??? Don't continue to refresh stimuli until saccade
-                       % finishes
-
-            % State 3 -- ???? faces
+            % State 3 -- ????
             % State 4 -- ISI
             
             o.state = 0;
@@ -948,19 +945,11 @@ classdef PR_FixedProceduralNoise < protocols.protocol
         o.x0=x;
         o.y0=y;
 
-        % If fixation is broken move to state 2, unless already in it:
-        if o.state ==2
-            o.state = 1.5; % pull into holding state, so stimuli only changes once
-        end
-
         %First check if there is any fixation
-        if (o.ds>o.threshold)&&(o.state~=1.5) %eye is moving
+        if o.ds>o.threshold
             o.state = 2; %Saccade: change stimuli
-        end
-
-        %If fixating again, return to normal state
-        if (o.state == 1.5)&&(o.ds<=o.threshold)
-            o.state = 1; % drop back to state 1
+        elseif o.state ==2
+            o.state =1; % drop back to state 1
         end
 
         % Previously:
@@ -975,6 +964,8 @@ classdef PR_FixedProceduralNoise < protocols.protocol
 
         % ALWAYS UPDATE THE PROBES
         [drop,faceitem] = o.updateProbes(x,y,currentTime); %#ok<ASGLU>
+
+
 
 
         if (o.state == 0)
@@ -1038,12 +1029,7 @@ classdef PR_FixedProceduralNoise < protocols.protocol
 %         %% PHOTODIODE FLASH, move to frame control/ output(?)
 %         %DPR - 5/5/2023
         if isfield(o.S,'photodiode')
-            if ~isempty(o.S.outputs)
-                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
-            else
-                dpout=0;
-            end
-
+            dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
             if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
                 Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
                 

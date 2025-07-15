@@ -11,6 +11,8 @@ classdef PR_Forage < handle
        rewardCount double = 0;     % counter for reward drops
        rewardGap double = 0;       % gap for next target onset
        rewardTime double = 0;      % store time of last reward
+       %**** Photodiode flash timing
+       Flashtime = [];
   end
       
   properties (Access = private)
@@ -728,7 +730,19 @@ classdef PR_Forage < handle
         if (o.state == 3) 
            o.Faces.beforeFrame(); 
         end
-        %****************************************   
+        %**************************************** 
+
+         % %% PHOTODIODE FLASH, move to frame control(?)
+%         %DPR - 5/5/2023
+        if isfield(o.S,'photodiode')
+            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
+                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
+            else
+                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
+            end
+       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
+        end
+       
     end
     
     function Iti = end_run_trial(o)

@@ -42,7 +42,7 @@ classdef grating_drifting_SFlinear < stimuli.stimulus
         contrasts double % list of contrast
         contrastSF
         phaseSF
-        prefori % central ori to vary around
+        prefori =0 % central ori to vary around
         
         % Note: these three parameters (above) can be overridden to produce
         % any combo of orientations and spatial frequencies using the
