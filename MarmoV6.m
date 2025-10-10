@@ -1200,8 +1200,10 @@ classdef MarmoV6 < matlab.apps.AppBase
                 D.outputs = (app.outputs); %
             
                 %Save Calibration, it can change per trial
-                D.C=    app.C;
-            
+                D.C=    app.C; %currently used calib.
+                app.A.c=app.FC.c;
+                UpdateEyeText(app);
+                UpdateEyePlot(app);  
             
                 %***************
                 % SAVE THE DATA

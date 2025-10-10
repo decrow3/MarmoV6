@@ -36,6 +36,8 @@ classdef PR_BackVideo < handle
     imo = [];  % matlab image struct
     imostill = []; % static image struct for background
     VidCounts = [];  % time-stamps for texture commands
+    nRepsPerFrame = 1;
+    FrameRepCounter=0;
     %********
     Ilist = [];
     Inum = 0;
@@ -64,7 +66,9 @@ classdef PR_BackVideo < handle
         o.VideoDirectory = S.VideoDirectory;
         %*************
         o.Ilist = dir([o.ImageDirectory,filesep,'*.jpeg']);
-        o.Vlist = dir([o.VideoDirectory,filesep,'*.avi']);
+        avilist = dir([o.VideoDirectory,filesep,'*.avi']);
+        mp4list = dir([o.VideoDirectory,filesep,'*.mp4']);
+        o.Vlist = [avilist mp4list];
         o.Inum = length(o.Ilist);
         o.Vnum = length(o.Vlist);
         o.Iperm = randperm(o.Inum);
@@ -131,6 +135,10 @@ classdef PR_BackVideo < handle
           end    
           %********************
           o.ImoCount = 0;  % start with static natural image and use timer
+
+        %To draw as close as possible to the original frame rate, round the
+        %marmoview rate to the nearest multiple of the video rate.
+        o.nRepsPerFrame=round(S.frameRate/o.vidObj.FrameRate);
     end
 
     function [FP,TS] = prep_run_trial(o)
@@ -181,32 +189,40 @@ classdef PR_BackVideo < handle
         end
         
         %********** DRAWING COMMANDS
-        if (o.ImoCount == 0)&&(~isempty(o.Ilist))  % first frame shown, now load the rest ...!
-            Screen('DrawTextures',o.winPtr,o.ImoScreen,o.ImageRect,o.ImageScreenRect);
-        else
-            if (o.VideoScreen > 0)  % clear texture as you go to not run out of memory
-               Screen('Close',o.VideoScreen);
-            end
-            if hasFrame(o.vidObj)
-               o.imo = readFrame(o.vidObj);
-               o.ImoRect = [0 0 size(o.imo,2) size(o.imo,1)];
-               o.VideoScreen = Screen('MakeTexture',o.winPtr,o.imo);
-               % Screen('DrawTexture', o.winPtr, o.imo, [], o.ImoRect);
-               Screen('DrawTextures',o.winPtr,o.VideoScreen,o.ImoRect,o.ScreenRect);
-               %********
-               o.ImoCount = o.ImoCount + 1; %Switch order here DPR 8-13-2024
-               o.VidCounts(o.ImoCount) = GetSecs();
-               
-               if (o.ImoCount >= o.ImoMaxN)
-                    %drop = 1;
-                    o.videoendTime = GetSecs;
-                    o.ImoCount = o.ImoMaxN;
-               end
-               %********
+        if o.FrameRepCounter==0
+            if (o.ImoCount == 0)&&(~isempty(o.Ilist))  % first frame shown, now load the rest ...!
+                Screen('DrawTextures',o.winPtr,o.ImoScreen,o.ImageRect,o.ImageScreenRect);
+                o.FrameRepCounter=o.nRepsPerFrame;
             else
-               o.ImoCount = o.ImoMaxN;
+                if (o.VideoScreen > 0)  % clear texture as you go to not run out of memory
+                   Screen('Close',o.VideoScreen);
+                end
+                if hasFrame(o.vidObj)
+                   o.imostill = readFrame(o.vidObj);
+                   o.ImoRect = [0 0 size(o.imostill,2) size(o.imostill,1)];
+                   o.VideoScreen = Screen('MakeTexture',o.winPtr,o.imostill);
+                   % Screen('DrawTexture', o.winPtr, o.imo, [], o.ImoRect);
+                   Screen('DrawTextures',o.winPtr,o.VideoScreen,o.ImoRect,o.ScreenRect);
+                   %********
+                   o.ImoCount = o.ImoCount + 1; %Switch order here DPR 8-13-2024
+                   o.VidCounts(o.ImoCount) = GetSecs();
+                   
+                   if (o.ImoCount >= o.ImoMaxN)
+                        %drop = 1;
+                        o.videoendTime = GetSecs;
+                        o.ImoCount = o.ImoMaxN;
+                   end
+
+                   o.FrameRepCounter=o.nRepsPerFrame;
+                   %********
+                else
+                   o.ImoCount = o.ImoMaxN;
+                end
+                %*********
             end
-            %*********
+        else %Don't change the image frame yet
+            Screen('DrawTextures',o.winPtr,o.VideoScreen,o.ImoRect,o.ScreenRect);
+            o.FrameRepCounter=o.FrameRepCounter-1;
         end
         %**************************************************************
     end

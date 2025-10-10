@@ -223,3 +223,30 @@ for i = 1:1000
     Screen('Flip', A.window)
 end
 
+%% Testing the Zebra noise stim from the Carandini lab
+% Create and setup stimulus
+stim = stimuli.zebranoise(A.window, 'xsize', 640, 'ysize', 480, 'duration', 10.0, 'comb_frequency', 0.008);
+
+% Use in PsychToolbox loop
+for frameNum = 1:stim.getTotalFrames()
+    frame = stim.getFrame(frameNum);
+    texture = Screen('MakeTexture', A.window, frame);
+    Screen('DrawTexture', A.window, texture);
+    Screen('Flip', A.window);
+    Screen('Close', texture);
+end
+
+%%
+stim = stimuli.zebranoise(A.window, 'xsize',2560, 'ysize', 1440, 'duration', 10.0,'pregenerate', true, 'cache_frames', true,'xyscale',0.2,'xscale',0.1,'yscale',0.1);
+%%
+% All frames generated once, fast access during presentation
+for frameNum = 1:stim.getTotalFrames()
+    frame = stim.getFrame(frameNum);
+    texture = Screen('MakeTexture', A.window, frame);
+    Screen('DrawTexture', A.window, texture);
+    Screen('Flip', A.window);
+    Screen('Close', texture);
+end
+
+%%
+

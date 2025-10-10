@@ -120,7 +120,7 @@ dotflow=stimuli.opticflow(A.window);
 
 %Position is relative to top left
 dotflow.position= [(S.screenRect(3)+S.screenRect(1))/2 (S.screenRect(4)+S.screenRect(2))/2];
-dotflow.f= 1.000;
+dotflow.f= 0.0100;
 dotflow.depth= 2;
 dotflow.size= 3;
 dotflow.vxyz= [0 0 .1];
@@ -155,6 +155,33 @@ for i = 1:1000
 
 end
 
+
+%% Flat dots hack???
+    o=dotflow;
+
+for i = 1:1000
+    dotflow.position =  [(S.screenRect(3)+S.screenRect(1))/2 (S.screenRect(4)+S.screenRect(2))/2] + [cosd(i) sind(i)]*15;
+
+    dotflow.beforeFrame()
+    Screen('Flip', A.window);
+    %Replace dotflow.afterFrame with 
+
+    Ax = [o.fs o.zs o.x-o.position(1)];
+    Ay = [o.zs o.fs o.y-o.position(2)];
+    
+    % Polar from center (direction to move)
+    ang=atan2((o.y-o.position(2)),(o.x-o.position(1)));
+
+    speed=2;
+    o.dx = speed.*cos(ang);
+    o.dy = speed.*sin(ang);
+    
+    % decrement frame counters
+    o.frameCnt = o.frameCnt - 1;
+
+    o.moveDots();
+    pause(0.01)
+end
 
 %% Grating/mouse interaction
 
@@ -196,3 +223,22 @@ for i = 1:1000
     Screen('Flip', A.window)
 end
 
+%% Testing the Zebra noise stim from the 
+% Create and setup stimulus
+stim = ZebraNoise('xsize', 640, 'ysize', 480, 'duration', 10.0);
+stim.setup(display_params);
+
+% Use in PsychToolbox loop
+for frameNum = 1:stim.getTotalFrames()
+    frame = stim.getFrame(frameNum);
+    texture = Screen('MakeTexture', winPtr, frame);
+    Screen('DrawTexture', winPtr, texture);
+    Screen('Flip', winPtr);
+    Screen('Close', texture);
+end
+
+%%
+
+stim = ZebraNoise('pregenerate', true, 'cache_frames', true);
+stim.setup(display_params);
+% All frames generated once, fast access during presentation

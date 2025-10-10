@@ -30,6 +30,7 @@ classdef opticflow < stimuli.stimulus
     screenRect = [];   % if radius Inf, then fill whole area
     colour = [1 1 1];
     bkgd double = 127;  
+    dotType double =1;
     % could add an aperture radius, for now fullscreen 
     maxRadius double; % maximum radius (pixels), default to Inf
     Xtop double; % max X (pixels) screenRect(3)
@@ -59,7 +60,8 @@ classdef opticflow < stimuli.stimulus
         
   properties (Access = private)
     winPtr; % ptb window
-
+    sRect
+    texturePointer
   end
   
   methods (Access = public)
@@ -75,25 +77,26 @@ classdef opticflow < stimuli.stimulus
       p = inputParser;
       p.StructExpand = true;
       
-      p.addParameter('position',o.position, isfloat); % [x,y] (pixels)
-    p.addParameter('f',o.f, isfloat); % focus
-    p.addParameter('depth',o.depth, isfloat); % depth of focus
-    p.addParameter('dotdepth',o.dotdepth, isfloat); % depth of dots
-
-    p.addParameter('size',o.size, isfloat); % dotsize
-    p.addParameter('vxyz',o.vxyz, isfloat); % speed xyz of dots
-    p.addParameter('nDots',o.nDots, isfloat); % number of dots
-    p.addParameter('transparent',o.transparent, isfloat); % from 0 to 1, how transparent
-    %p.addParameter('pixperdeg',o.pixperdeg, isfloat); % [x,y] (pixels)
-    p.addParameter('colour',o.colour, isfloat); % dot colour
-    p.addParameter('bkgd',o.bkgd, isfloat); % 
-    p.addParameter('maxRadius',o.maxRadius, isfloat); % maximum radius (pixels), default to Inf
-    p.addParameter('Xtop',o.Xtop, isfloat); % max X (pixels)
-    p.addParameter('Xbot',o.Xbot, isfloat); % min X (pixels)
-    p.addParameter('Ytop',o.Ytop, isfloat); % max Y (pixels)
-    p.addParameter('Ybot',o.Ybot, isfloat); % min Y (pixels)
-
-                  
+        p.addParameter('position',o.position, isfloat); % [x,y] (pixels)
+        p.addParameter('f',o.f, isfloat); % focus
+        p.addParameter('depth',o.depth, isfloat); % depth of focus
+        p.addParameter('dotdepth',o.dotdepth, isfloat); % depth of dots
+        
+        p.addParameter('size',o.size, isfloat); % dotsize
+        p.addParameter('vxyz',o.vxyz, isfloat); % speed xyz of dots
+        p.addParameter('nDots',o.nDots, isfloat); % number of dots
+        p.addParameter('transparent',o.transparent, isfloat); % from 0 to 1, how transparent
+        %p.addParameter('pixperdeg',o.pixperdeg, isfloat); % [x,y] (pixels)
+        p.addParameter('colour',o.colour, isfloat); % dot colour
+        p.addParameter('bkgd',o.bkgd, isfloat); % 
+        p.addParameter('maxRadius',o.maxRadius, isfloat); % maximum radius (pixels), default to Inf
+        p.addParameter('Xtop',o.Xtop, isfloat); % max X (pixels)
+        p.addParameter('Xbot',o.Xbot, isfloat); % min X (pixels)
+        p.addParameter('Ytop',o.Ytop, isfloat); % max Y (pixels)
+        p.addParameter('Ybot',o.Ybot, isfloat); % min Y (pixels)
+        
+        p.addParameter('dotType',o.dotType, isfloat); % 
+                 
       try
         p.parse(args{:});
       catch
@@ -134,6 +137,56 @@ classdef opticflow < stimuli.stimulus
       else
         o.frameCnt = inf(o.nDots,1);
       end
+
+      %% TODO, CHANGE THIS TO RAISED COSINE
+      % Generate lowpass dot texture if needed (trial based for different
+      % sizes)
+      if o.dotType>4
+        dotsize=o.size; %single cycle in pixels
+
+        % Generate a circle image
+        radius = dotsize/2; % radius of the circle
+        image_size = dotsize*3; % size of the image
+        [x, y] = meshgrid(1:image_size, 1:image_size);
+        center = [image_size / 2, image_size / 2];
+        circle_image = (sqrt((x - center(1)).^2 + (y - center(2)).^2) <= radius);
+        
+        % Compute the Fourier Transform of the image
+        F = fftshift(fft2(circle_image));
+        
+        % Create a bandpass filter in the frequency domain
+        low_cutoff = 0; % low cutoff frequency
+        high_cutoff = 1/(dotsize); % high cutoff frequency, cycles per image_size
+        [fx, fy] = meshgrid(-image_size/2:image_size/2-1, -image_size/2:image_size/2-1);
+        
+        % Normalize frequency grid to cycles per pixel
+        fx = fx / image_size;
+        fy = fy / image_size;
+        
+        frequency_radius = sqrt(fx.^2 + fy.^2);
+        
+        % Bandpass filter: 1 inside the bandpass range, 0 otherwise
+        bandpass_filter = (frequency_radius >= low_cutoff) & (frequency_radius <= high_cutoff);
+        
+        % Apply the bandpass filter to the Fourier Transform
+        filtered_F = F .* bandpass_filter;
+        
+        % Perform inverse FFT to get the filtered image
+        filtered_image = real(ifft2(ifftshift(filtered_F)));
+        o.texturePointer=Screen('MakeTexture', o.winPtr, filtered_image);
+        o.sRect = SetRect(0,0,size(filtered_image,2),size(filtered_image,1));
+        %DEBUG
+%         % Display the original and filtered images
+%         subplot(1,2,1);
+%         imshow(circle_image);
+%         title('Original Circle');
+%         
+%         subplot(1,2,2);
+%         imshow(filtered_image, []);
+%         title('Bandpass Filtered Circle');
+
+      end
+
     end
     
     function beforeFrame(o)
@@ -264,7 +317,6 @@ classdef opticflow < stimuli.stimulus
     
     function drawDots(o)     
       dotColour = o.colour; %zeros([1,3]); %repmat(0,1,3);
-      
       % dotType:
       %
       %   0 - square dots (default)
@@ -272,16 +324,23 @@ classdef opticflow < stimuli.stimulus
       %   2 - round, anti-aliased dots (favour quality)
       %   3 - round, anti-aliased dots (built-in shader)
       %   4 - square dots (built-in shader)
+      %   5 - low pass filtered dots from textures
       dotType = 1;
-      
-
+      if dotType<5
         colmat = dotColour';
-
-%         Screen('DrawDots',o.winPtr,[o.x(:), -1*o.y(:)]', o.size, colmat', o.position, dotType);
-
+        
+        %         Screen('DrawDots',o.winPtr,[o.x(:), -1*o.y(:)]', o.size, colmat', o.position, dotType);
+        
         % Place dots in screen coordinates, left and down from top left
         % corner, do positional math elsewhere
         Screen('DrawDots',o.winPtr,[o.x(:), o.y(:)]', o.size, colmat', [0,0], dotType);
+      else
+          % Using DrawTextures command, we may need to flip yaxis from DrawDot definition 
+          
+          destinationRects = CenterRectOnPoint(o.sRect,o.x(:),o.y(:)); 
+          %Screen('DrawTextures', windowPointer, texturePointer(s) [, sourceRect(s)] [, destinationRect(s)] [, rotationAngle(s)] [, filterMode(s)] [, globalAlpha(s)] [, modulateColor(s)] [, textureShader] [, specialFlags] [, auxParameters]);
+          Screen('DrawTextures', windowPointer, o.texturePointer, o.sRect, destinationRects)
+      end
 
     end
   end % methods

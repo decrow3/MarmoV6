@@ -25,8 +25,8 @@ S.protocol_class = ['protocols.PR_',S.protocol];
 %NOTE: in MarmoView2 subject is entered in GUI
 
 %******** Don't allow in trial calibration for this one (comment out)
-% P.InTrialCalib = 1;
-% S.InTrialCalib = 'Eye Calib in Trials';
+P.InTrialCalib = 1;
+S.InTrialCalib = 'Eye Calib in Trials';
 S.TimeSensitive = 1:7;
 
 % STORE EYE POSITION DATA
@@ -46,7 +46,7 @@ S.protocolTitle = 'Refine eye position';
 % Reward setting
 P.rewardNumber = 3;   % Max juice, only one drop ... it is so easy!
 S.rewardNumber = 'Number of juice pulses to deliver:';
-P.CycleBackImage = 5;
+P.CycleBackImage = 50;
 S.CycleBackImage = 'If def, backimage every # trials:';
 
 %**********************
@@ -59,17 +59,17 @@ S.refractoryDur = 'Duration post flash before can be shown again (s):';
 P.stimDur = 0.25;  % duration of peripheral stim (offset before sac)
 S.stimDur = 'Duration of flashed stim (s):';
 
-P.postSacGraceDur = 0.05;
-S.postSacGraceDur = 'Stimulus duration post-saccade (s):';
+P.fixGraceDur  = 0.05;
+S.fixGraceDur  = 'Stimulus duration post-saccade (s):';
 
-P.eyeVelThresh = 10;
+P.eyeVelThresh = 3;
 S.eyeVelThresh = 'Velocity for online saccade detection (deg/sec):';
 
 P.useFace = true;
 S.useFace = 'Use face as target (logical):';
 
 
-P.trialDuration = 20;
+P.trialDuration = 5;
 S.trialDuration = 'Length of trial (s, must be < 20):';
 %*******
 P.targRadius = .5;  % diameter of target is dva
@@ -79,11 +79,11 @@ P.bkgd = 127;
 S.bkgd = 'Choose a grating background color (0-255):';
 
 % Gaze indicator
-P.eyeRadius = 1.5; % 1.5;
+P.eyeRadius = 1; % 1.5;
 S.eyeRadius = 'Gaze indicator radius (degrees):';
-P.eyeIntensity = 5;
+P.eyeIntensity = 95;
 S.eyeIntensity = 'Indicator intensity:';
-P.showEye = 0;
+P.showEye = 1;
 S.showEye = 'Show the gaze indicator? (0 or 1):';
 
 

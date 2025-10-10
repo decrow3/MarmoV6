@@ -18,6 +18,7 @@ function S = MarmoViewRigSettings
 % monitor related variables here.
 % 
 RigName = 'Laptop';
+S.persistence=0; %Only true for very specific stimuli, leave this false unless you really know what you are doing
 
 switch RigName
 

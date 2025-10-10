@@ -16,7 +16,7 @@ S.finish = 100;   % need to run in multiples of 50
 % PROTOCOL PREFIXS
 S.protocol = 'BackVideo';
 S.protocol_class = ['protocols.PR_',S.protocol];
-S.VideoDirectory = 'video_dyballa';
+S.VideoDirectory = 'SquirrelTest';
 S.ImageDirectory = 'Image';  % default is Backgrounds directory
                               % but you can easily choose another
                               % and place it under SupportData
