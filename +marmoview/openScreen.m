@@ -14,6 +14,12 @@ Screen('CloseAll');
 % setup the image processing pipeline for ptb
 PsychImaging('PrepareConfiguration');
 
+%Shouldn't need to do this, in fact this might break debug screen. Frame
+%rate can be set from xorg but this is breaking current set up
+hz=Screen('FrameRate', S.screenNumber);
+if S.frameRate~=hz
+    SetResolution(S.screenNumber,S.screenRect(3),S.screenRect(4),S.frameRate);
+end
 % PsychImaging('AddTask', 'General', 'FloatingPoint16Bit');
 PsychImaging('AddTask','General','FloatingPoint32BitIfPossible', 'disableDithering',1);
 
@@ -24,7 +30,7 @@ PsychImaging('AddTask','FinalFormatting','DisplayColorCorrection','SimpleGamma')
 if isfield(S,'DummyScreen') && S.DummyScreen
   [A.window, A.screenRect] = PsychImaging('OpenWindow',0,S.bgColour,S.screenRect);
 else    
-  [A.window, A.screenRect] = PsychImaging('OpenWindow',S.screenNumber,S.bgColour,[],[],[],S.stereoMode);
+  [A.window, A.screenRect] = PsychImaging('OpenWindow',S.screenNumber,S.bgColour);
   
   % Add gamma correction
   PsychColorCorrection('SetEncodingGamma',A.window,1/S.gamma);

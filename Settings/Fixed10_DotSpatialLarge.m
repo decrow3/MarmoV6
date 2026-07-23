@@ -50,7 +50,7 @@ P.CycleBackImage = 5;
 S.CycleBackImage = 'If def, backimage every # trials:';
 
 %******* trial timing and reward
-P.holdDur = 0.10;
+P.holdDur = 0.1;
 S.holdDur = 'Duration at grating for reward (s):';
 P.fixRadius = 2.5;  
 S.fixRadius = 'Probe reward radius(degs):';
@@ -202,7 +202,7 @@ switch P.noisetype
         S.scaleRange = 'range of stdevs (d.v.a):';
         
     case 5 % spatial noise dots (using DrawDots)
-        P.numDots = 100;
+        P.numDots = 1000;
         S.numDots = 'number of dots to show on each frame:';
         
         P.dotSize = .5;
@@ -217,7 +217,7 @@ switch P.noisetype
         P.noiseContrast = .5;
         S.noiseContrast = 'contrast of the dot noise:';
         
-        P.noiseFrameRate = 60;
+        P.noiseFrameRate = 240;
         S.noiseFrameRate = 'frame rate of the noise background:';
         
 end

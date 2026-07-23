@@ -116,10 +116,10 @@ S.noisetype = 'Cannot change during protocol';
 switch P.noisetype
         
     case 8 % drifting gratings
-        P.numDir = 1;
+        P.numDir = 6;
         S.numDir = 'Number of directions to draw from:';
 
-        P.numPhase = 4;
+        P.numPhase = 8;
         S.numPhase = 'Number of phases to draw from:';
 
         P.GratSFmin = 0.5;  % will be [0.5 1 2 4 8]
@@ -127,7 +127,7 @@ switch P.noisetype
         
         % Want to use linear spacing to get more harmonics, also this is
         % not really the number of octaves covered, fencepost problem
-        P.GratNumOct = 4;   % using linear span [4 8 12 16 20 24 28 32 36 40 44 48 52 56 60 64];
+        P.GratNumOct = 4;   % 12 frq using linear span [4 8 12 16 20 24 28 32 36 40 44 48 52 56 60 64];
         S.GratNumOct = 'Num Spat Freq Octaves:';
     
         P.GratSpeed = 1;

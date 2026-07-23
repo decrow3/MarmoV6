@@ -53,8 +53,6 @@ classdef FrameControl < matlab.mixin.Copyable & handle
      centerPix = [0,0];
      pixPerDeg = 30; 
      frameRate = 60; 
-     persistence logical = 1; % Flag for whether to keep 
-     scr_gamma double = 1; % For redrawing
   end
 
   methods
@@ -67,7 +65,9 @@ classdef FrameControl < matlab.mixin.Copyable & handle
       %*************
       o.TimeSensitive = [];  %no states time sensitive by default
       %*************
-      o.FMAX = 5000;  %capped at a Max of 5000 screen flips
+      %Dont change this here
+      o.FMAX = 58000;% 12800;  %capped at a Max of 5000 screen flips, upped to 12800 frames, DPR 8-14-2024/ this is actually set later
+      % Upped again in 2-23-2026
       o.FIELDS = 9;
       o.FData = nan(o.FMAX,o.FIELDS);   %per trial data storage
       o.FCount = 0;
@@ -102,9 +102,7 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         o.dy = C.dy;
         %**************
         o.frameRate = S.frameRate;
-        o.scr_gamma = S.gamma;
-        o.persistence = S.persistence; %Flag for holding stimuli on screen between trials
-        o.FMAX = ceil(60*o.frameRate); % max trial is 20 seconds, regardless of framerate
+        o.FMAX = 12800;%ceil(240*o.frameRate); % max trial is 20 seconds, regardless of framerate. now 4mins, yikes 8-14-2024
         o.centerPix = S.centerPix;
         o.pixPerDeg = S.pixPerDeg;
         
@@ -193,19 +191,9 @@ classdef FrameControl < matlab.mixin.Copyable & handle
           o.FData(1:o.FCount,1) = GetSecs;  % column 1 timelock on eye pos
           %*************
           
-        %%%%%%%-- MESSING WITH THIS DPR 12/17/2024 to allow
-        %%%%%%%dots to linger between trials
           % Setup first frame
-            if o.persistence ==0
-                Screen('FillRect',o.winPtr,o.Bkgd);
-            else % Keep last screen image (but need to flip for timing)
-                img=Screen('GetImage',o.winPtr);
-                scr_gamma=o.scr_gamma;%2.5554; %hard coding until we can pass this
-                img=255*((255.^-scr_gamma)*double(img(:,:,1)).^scr_gamma);
-                Screen('PutImage', o.winPtr, img);
-            end
+          Screen('FillRect',o.winPtr,o.Bkgd);
           % when flipping, store time in eyeData
-
           [vbl, stimOnset, FlipTimestamp, Missed] = Screen('Flip',o.winPtr,0);
           %***** Get initial into *************
           o.FData(1:o.FCount,2) = eyepos(1);
@@ -216,9 +204,6 @@ classdef FrameControl < matlab.mixin.Copyable & handle
           o.FData(1:o.FCount,7) = stimOnset;
           o.FData(1:o.FCount,8) = FlipTimestamp;
           o.FData(1:o.FCount,9) = Missed;
-
-          % DPR- adding because having eyepos/screenfliptime and stimulus state (that was shown) is useful  
-          o.FData(1:o.FCount,10) = 0; % Shown state
           %******* Store the Clock Sixlet ***********
           CL = fix(clock);
           CL(1) = CL(1) - 2000;
@@ -292,22 +277,13 @@ classdef FrameControl < matlab.mixin.Copyable & handle
             [vblTime,stimOnset, FlipTimestamp, Missed] = Screen('Flip',o.winPtr,o.FData(eyeI-1,6)+ifi/2,o.dontclear);
        end
         
-       % o.FData(eyeI,5) = state; % We want the state that was actually shown
-       % This was commented out in marmov5, why? It's set in grabeye_run_trial,
-       % but shouldn't new state be updated on flip to match state on flip ???
-       
-       % FData(:,1) has the time at begining 'currenttimes' used for
-       % stimuli generation, maybe we should leave FData(:,5) to hold state
-       % before updates and make a new column for new/flipped state
-
+%        o.FData(eyeI,5) = state; 
         o.FData(eyeI,6) = vblTime;
         o.FData(eyeI,7) = stimOnset;
         o.FData(eyeI,8) = FlipTimestamp;
         o.FData(eyeI,9) = Missed;
-        o.FData(eyeI,10) = state; % State after screen update
-        % For revcorr -6 gives time, 10 gives state
 
-     %   disp(o.FData(eyeI,6)-o.FData(eyeI-1,6))
+%        disp(o.FData(eyeI,6)-o.FData(eyeI-1,6))
        % Reset the screen
 %        Screen('FillRect',o.winPtr,o.Bkgd);
     
@@ -330,16 +306,7 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         % Reset the screen and leave blank for ITI
         o.FCount = o.FCount + 1;
         eyeI = o.FCount;
-        %Playing around with trying to keep dots on screen between trials
-        %for MT, not for actual use: 12/17/2024
-        if o.persistence ==0
-            Screen('FillRect',o.winPtr,o.Bkgd);
-        else % Keep last screen image (but need to flip for timing)
-            img=Screen('GetImage',o.winPtr);
-            scr_gamma=o.scr_gamma;%2.5554; %hard coding until we can pass this
-            img=255*((255.^-scr_gamma)*double(img(:,:,1)).^scr_gamma);
-            Screen('PutImage', o.winPtr, img);
-        end
+        Screen('FillRect',o.winPtr,o.Bkgd);
         FEnd = Screen('Flip',o.winPtr,GetSecs);
         o.FData(eyeI,6) = FEnd;
         %******* Store the Clock Sixlet ***********

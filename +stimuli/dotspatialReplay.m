@@ -83,7 +83,7 @@ classdef dotspatialReplay < stimuli.stimulus
             ip.addParameter('size',10.0); % pixels?
             ip.addParameter('speed',0.02); % deg./s
             ip.addParameter('direction',90.0,@(x) isscalar(x) && isreal(x)); % deg.
-            ip.addParameter('numDots',100,@(x) ceil(x));
+            ip.addParameter('numDots',300,@(x) ceil(x));
             ip.addParameter('lifetime',Inf);
             ip.addParameter('maxRadius',10.0); % deg.
             
@@ -96,7 +96,7 @@ classdef dotspatialReplay < stimuli.stimulus
             ip.addParameter('frameUpdate', 0)
             ip.addParameter('sigma', inf)
           
-            ip.addParameter('pixPerDeg',81.2548)
+            ip.addParameter('pixPerDeg',51.4418)
             ip.addParameter('dotType',1)
             ip.parse(varargin{:});
             obj.lifetime = Inf;

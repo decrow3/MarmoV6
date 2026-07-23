@@ -12,8 +12,6 @@ classdef treadmill_dummy < marmoview.behavior
         maxFrames double
         rewardDist double
         rewardProb double
-
-        UseAsEyeTracker
     end
     
     properties (SetAccess = private, GetAccess = public)
@@ -32,7 +30,6 @@ classdef treadmill_dummy < marmoview.behavior
             ip.addParameter('maxFrames', 5e3)
             ip.addParameter('rewardDist', inf)
             ip.addParameter('rewardProb', 0)
-            ip.addParameter('UseAsEyeTracker', false)
             ip.parse(varargin{:});
             
             args = ip.Results;
@@ -85,27 +82,10 @@ classdef treadmill_dummy < marmoview.behavior
             self.frameCounter = self.frameCounter + 1;
         end 
         
-        function starttrial(self,STARTCLOCK,STARTCLOCKTIME)
+        function starttrial(STARTCLOCK,STARTCLOCKTIME)
             reset(self)
         end
 
-        function unpause(~,~)
-        end
-
-        function startfile(~,~)
-            % no file is saved if using mouse
-        end
-        
-        function closefile(~)
-        end
-
-        function readinput(self,~)
-        end
-
-        function endtrial(~,~,~,~)
-        end
-
-        
         function reset(self)
             self.frameCounter = 1;
             self.locationSpace(:) = nan;

@@ -36,6 +36,7 @@ classdef PR_BackImages < handle
     y0=0;
     ds=0;
     threshold=.25;
+    tfix=[];
     %**********************************
   end
   
@@ -73,14 +74,13 @@ classdef PR_BackImages < handle
           o.closeFunc();  % clear any remaining images in memory
                           % before you allocated more (one per time)
           
-
           %Random draw from files
           for ii= 1:o.P.nImages
           %******************
           if (~isempty(flist))
               % We need to be careful about randomising here if we are also
               % going to randomise later
-             fimo = 1 + floor( (rand * 0.99) * size(flist,1) );
+             fimo = ii;%1 + floor( (rand * 0.99) * size(flist,1) );
              fname = flist(fimo).name;  % name of an image
              o.ImageFile{ii} = [o.ImageDirectory,filesep,fname];
              o.imo{ii} = imread(o.ImageFile{ii});
@@ -216,10 +216,11 @@ classdef PR_BackImages < handle
             o.state = 2; %Saccade: change stimuli
             o.tex = o.tex+1;
             o.tex=rem(o.tex-1,o.P.nImages)+1; %restart sequence if not enough images
+            o.tfix=currentTime;
         end
 
         %If fixating again, return to normal state
-        if (o.state == 1.5)&&(o.ds<=o.threshold)
+        if (o.state == 1.5)&&(o.ds<=o.threshold)&&(currentTime-o.tfix>0.100)
             o.state = 1; % drop back to state 1
         end
 
@@ -315,7 +316,7 @@ classdef PR_BackImages < handle
         %*********** draw the scaled image, then overlay eye position
         subplot(handles.EyeTrace); hold off;
 %         H = imagesc(cix,ciy,flipud(o.imo(iy,ix,:)));
-        %imagesc(cix,ciy,flipud(o.imo{1}(iy,ix,:))); % don't output handle
+        imagesc(cix,ciy,flipud(o.imo{1}(iy,ix,:))); % don't output handle
         if (size(o.imo{1},3)==1)
             colormap('gray');
         end
@@ -335,6 +336,7 @@ classdef PR_BackImages < handle
         PR.lastimg = o.tex;
         PR.texlist = o.texlist;
         PR.ImageHistory = o.ImageHistory;
+        PR.Flashtime = o.Flashtime;
     end
     
   end % methods

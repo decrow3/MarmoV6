@@ -14,7 +14,7 @@ S = MarmoViewRigSettings;
 S.MarmoViewVersion = '6';
 
 % PARAMETER DESCRIBING TRIAL NUMBER TO STOP TASK
-S.finish = 100;
+S.finish = 250;
 
 % PROTOCOL PREFIX
 S.protocol = 'ForageProceduralNoise';
@@ -50,9 +50,9 @@ P.CycleBackImage = 5;
 S.CycleBackImage = 'If def, backimage every # trials:';
 
 %******* trial timing and reward
-P.holdDur = 0.10;
+P.holdDur = 0.9;%0.10;
 S.holdDur = 'Duration at grating for reward (s):';
-P.fixRadius = 2.5;  
+P.fixRadius = 0.25;%2.5;  
 S.fixRadius = 'Probe reward radius(degs):';
 P.trialdur = 10; 
 S.trialdur = 'Trial Duration (s):';
@@ -70,9 +70,9 @@ P.faceTime = 0.1;  % duration of flashed face, in ms
 S.faceTime = 'Duration of Face Flash (s):';
 
 %************** Probe properties
-P.proberadius = 1.0;  % radius of target is dva
+P.proberadius = 0.2;%1.0;  % radius of target is dva
 S.proberadius = 'Size of Target(dva):';
-P.probecon = 1.0; %0.50; 
+P.probecon =  0.50;% 1.0;
 S.probecon = 'Transparency of Probe (1-none, 0-gone):';
 P.proberange = 48; %a bit brighter
 S.proberange = 'Luminance range of grating (1-127):';
@@ -84,7 +84,7 @@ P.stimSpeed = 0;
 S.stimSpeed = 'Speed of probe (degs/sec):';
 P.orinum = 3;  
 S.orinum = 'Orientations to sample of stimulus';
-P.prefori = 40;
+P.prefori = 45;
 S.prefori = 'Preferred orientation (degs):';
 P.cpd = 3;  
 S.cpd = 'Probe Spatial Freq (cyc/deg)';
@@ -140,13 +140,14 @@ S.noisetype = 'Cannot change during protocol';
         P.GratDiameter = inf;
         S.GratDiameter = 'Grating Diameter (d.v.a., inf = full):';
         
-        P.GratDurOn = 100;
+        %This needs to be fixed for variable frame rates
+        P.GratDurOn = 100*(240/60);
         S.GratDurOn = 'Grating on duration (frames):';
         
-        P.GratDurOff = 40;
+        P.GratDurOff = 40*(240/60);
         S.GratDurOff = 'Grating min ISI duration (frames):';
         
-        P.GratISIjit = 10;
+        P.GratISIjit = 10*(240/60);
         S.GratISIjit = 'ISI jitter amount (frames, added to Off duration:';
         
         P.GratCon = 0.5;

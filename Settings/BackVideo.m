@@ -8,15 +8,45 @@ S = MarmoViewRigSettings;
 
 % NOTE THE MARMOVIEW VERSION USED FOR THIS SETTINGS FILE, IF AN ERROR, IT
 % MIGHT BE A VERSION PROBLEM
-S.MarmoViewVersion = '5';
+S.MarmoViewVersion = '6';
 
 % PARAMETER DESCRIBING TRIAL NUMBER TO STOP TASK
-S.finish = 100;   % need to run in multiples of 50
+S.finish = 90;   % need to run in multiples of 50
 
 % PROTOCOL PREFIXS
 S.protocol = 'BackVideo';
 S.protocol_class = ['protocols.PR_',S.protocol];
+
+
+fullvideo=1;
+if fullvideo==1
+    %% Full Video
+    S.VideoDirectory = 'full_video_dyballa'; %lat 2024 -early 2025
+    % Trial timing
+    P.imageDur = (1/60)*(11520); %~208s %(1/60)*12480; %~208s 
+    S.imageDur = 'Duration to display image (s):';
+    P.iti = 0.75;
+    S.iti = 'Duration of intertrial interval (s):';
+else
+    %% Short video snippets
+    S.VideoDirectory = 'video_dyballa';
+    % Trial timing
+    P.imageDur = 1.25;  % run two of them per movie?
+    S.imageDur = 'Duration to display image (s):';
+    P.iti = 0.75;
+    S.iti = 'Duration of intertrial interval (s):';
+end
+% 
+% 
+sqvid=0;
+if sqvid
 S.VideoDirectory = 'SquirrelTest';
+P.imageDur = 15; 
+S.imageDur = 'Duration to display image (s):';
+P.iti = 0.75;
+S.iti = 'Duration of intertrial interval (s):';
+end
+
 S.ImageDirectory = 'Image';  % default is Backgrounds directory
                               % but you can easily choose another
                               % and place it under SupportData
@@ -49,7 +79,7 @@ S.calibFilename = 'MarmoViewLastCalib.mat';
 % THEY ALSO MUST INCLUDE DESCRIPTION OF THE VALUE IN THE SETTINGS ARRAY
 
 % Stimulus settings
-P.juiceInterval = 5.0;
+P.juiceInterval = 20.0;
 S.juiceInterval = 'Give juice every N secs';
 P.eyeRadius = 2.0;
 S.eyeRadius = 'Gaze indicator radius (degrees):';
@@ -60,9 +90,5 @@ S.showEye = 'Show the gaze indicator? (0 or 1):';
 P.bkgd = 127;
 S.bkgd = 'Choose the background color (0-255):';
 
-% Trial timing
-P.imageDur = 10;  % run two of them per movie?
-S.imageDur = 'Duration to display image (s):';
-P.iti = 2;
-S.iti = 'Duration of intertrial interval (s):';
+
     

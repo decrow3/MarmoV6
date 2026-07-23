@@ -89,7 +89,7 @@ classdef PR_ForageRepeatingNoise < protocols.protocol
            o.hProbe{kk} = stimuli.grating(o.winPtr);  % grating probe
            o.hProbe{kk}.transparent = -P.probecon;  % blend in proportion to gauss
            o.hProbe{kk}.gauss = true;
-           o.hProbe{kk}.pixPerDeg = S.pixPerDeg;
+           o.hProbe{kk}.pixperdeg = S.pixPerDeg;
            o.hProbe{kk}.radius = round(P.proberadius*S.pixPerDeg);
           
            o.hProbe{kk}.range = P.proberange;

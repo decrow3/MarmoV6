@@ -10,8 +10,10 @@ classdef PR_DotsflowTesting < handle
        endTime double   = 0; % trial end time = stimEnd        
        rewardCount double = 0;    % counter for reward drops
        FrameCount double = 0;
-       MaxFrame double = 10*60;
+       MaxFrame double = 10*240;%10*60;
        FlowHistory double = [];
+       %**** Photodiode flash timing
+       Flashtime = [];
        
   end
       
@@ -49,7 +51,7 @@ classdef PR_DotsflowTesting < handle
  
          %********** Initialize Graphics Objects
          o.hFlow = stimuli.dotspatial(o.winPtr);   % dots flow stimulus
-         o.FlowHistory = zeros(o.MaxFrame,5,300);
+         o.FlowHistory = zeros(o.MaxFrame,6,300);
          
     end
    
@@ -69,7 +71,8 @@ classdef PR_DotsflowTesting < handle
     function P = next_trial(o,S,P)
           %********************
           o.S = S;
-          o.P = P;       
+          o.P = P;  
+          o.Flashtime = [];
           %*******************
         
           if P.runType == 1   % go through trials list    
@@ -122,6 +125,10 @@ classdef PR_DotsflowTesting < handle
         if (o.state < 1) % as the flow finishes its presentation, state turns to 1 from 0
             keepgoing = 1;
         end
+        if (o.FrameCount)
+           o.FlowHistory(o.FrameCount,6,:) = screenTime;  %store screen flip 
+        end
+   
     end
    
     %******************** THIS IS THE BIG FUNCTION *************
@@ -208,13 +215,42 @@ classdef PR_DotsflowTesting < handle
           
         % %% PHOTODIODE FLASH, move to frame control(?)
 %         %DPR - 5/5/2023
+       %  if isfield(o.S,'photodiode')
+       %      if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
+       %          Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
+       %      else
+       %          Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
+       %      end
+       % % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
+       %  end
+        % 2025
         if isfield(o.S,'photodiode')
+            if ~isempty(o.S.outputs)
+                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
+                ardout=find(cellfun(@(x) strcmp(x,'output_arduino'), o.S.outputs));
+            else
+                dpout=0;
+                ardout=0;
+            end
+
             if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
                 Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
+                
+                %Should be <20 so shouldn't need to preallocate but..
+                o.Flashtime=[o.Flashtime; currentTime];
+
+                if dpout
+                    %ttl4 high
+                    outputs{dpout}.flipBitVideoSync(4,1)
+                end
             else
                 Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
+                if dpout
+                    %ttl4 low
+                    outputs{dpout}.flipBitVideoSync(4,0)
+                end
             end
-       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
+            % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
         end
        
         %**************************************************************
@@ -240,6 +276,7 @@ classdef PR_DotsflowTesting < handle
         PR.FlowHistory = o.FlowHistory;
         PR.startTime = o.startTime;
         PR.endTime = o.endTime;
+        PR.Flashtime = o.Flashtime;
         
         %******* this is also where you could store Gabor Flash Info
         

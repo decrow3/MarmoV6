@@ -50,6 +50,7 @@ classdef PR_FixedProceduralNoise < protocols.protocol
     y0=0;
     ds=0;
     threshold=.25;
+    tfix=[];
     %**********************************
     D struct = struct()        % store PR data for end plot stats, will store dotmotion array
   end
@@ -437,7 +438,7 @@ classdef PR_FixedProceduralNoise < protocols.protocol
             % State 0 -- Prep, prestimulus
             % State 1 -- Fixating somewhere on screen
             % State 2 -- Fixation broken (refresh stimuli)
-            % State 5??? Don't continue to refresh stimuli until saccade
+            % State 1.5??? Don't continue to refresh stimuli until saccade
                        % finishes
 
             % State 3 -- ???? faces
@@ -950,16 +951,19 @@ classdef PR_FixedProceduralNoise < protocols.protocol
 
         % If fixation is broken move to state 2, unless already in it:
         if o.state ==2
-            o.state = 1.5; % pull into holding state, so stimuli only changes once
+            o.state = 1.5; % pull into holding state, so stimuli only changes once per saccade
+            %still draw in this state
+
         end
 
         %First check if there is any fixation
         if (o.ds>o.threshold)&&(o.state~=1.5) %eye is moving
             o.state = 2; %Saccade: change stimuli
+            o.tfix=currentTime;
         end
 
         %If fixating again, return to normal state
-        if (o.state == 1.5)&&(o.ds<=o.threshold)
+        if (o.state == 1.5)&&(o.ds<=o.threshold)&&(currentTime-o.tfix>0.100)
             o.state = 1; % drop back to state 1
         end
 

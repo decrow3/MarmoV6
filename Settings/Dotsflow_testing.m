@@ -14,7 +14,7 @@ S = MarmoViewRigSettings;
 S.MarmoViewVersion = '6';
 
 % PARAMETER DESCRIBING TRIAL NUMBER TO STOP TASK
-S.finish = 150; % 
+S.finish = 30; % 
 
 % PROTOCOL PREFIX
 S.protocol = 'DotsflowTesting';
@@ -54,8 +54,8 @@ S.trialdur = 'Trial/Dots Flow Duration (s):';
 %************** stimulus settings 
 
 %P.FlowHis = load('FlowHis.mat');
-P.size = 25;
-S.size = 'Dot size (pix)'; % 0.5 visual deg 
+P.size = 34;
+S.size = 'Dot size (pix)'; % 0.8 visual deg 
 P.speed = 5;
 S.speed = 'Dot motion speed for passive viewing (deg/s)';
 P.direction = 180;
@@ -64,7 +64,7 @@ P.numDots = 300;
 S.numDots = 'Number of dots';
 P.lifetime = Inf;
 S.lifetime = 'Lifetime of the dots (frames)';
-P.maxRadius = 25;
+P.maxRadius = 25; %25 for MT 
 S.maxRadius = 'Maximum radius of the dots';
 P.position = S.screenRect(3:4).*0.5;
 S.position = 'Origin position in draw dots function';
