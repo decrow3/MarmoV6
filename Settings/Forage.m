@@ -11,7 +11,7 @@ S = MarmoViewRigSettings;
 
 % NOTE THE MARMOVIEW VERSION USED FOR THIS SETTINGS FILE, IF AN ERROR, IT
 % MIGHT BE A VERSION PROBLEM
-S.MarmoViewVersion = '5';
+S.MarmoViewVersion = '6';
 
 % PARAMETER DESCRIBING TRIAL NUMBER TO STOP TASK
 S.finish = 800;
@@ -104,7 +104,7 @@ P.showEye = 0;
 S.showEye = 'Show the gaze indicator? (0 or 1):';
 
 %***** FORAGE CAN ACCEPT DIFFERENT BACKGROUND TYPES *****
-P.noisetype = 4;
+P.noisetype = 5;
 S.noisetype = 'Background (0-none,1-hartley, 2-spatial, ...):';
 
 if (P.noisetype == 1)

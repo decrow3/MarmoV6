@@ -12,6 +12,8 @@ classdef PR_DotsflowTesting < handle
        FrameCount double = 0;
        MaxFrame double = 10*60;
        FlowHistory double = [];
+       %**** Photodiode flash timing
+       Flashtime = [];
        
   end
       
@@ -49,7 +51,7 @@ classdef PR_DotsflowTesting < handle
  
          %********** Initialize Graphics Objects
          o.hFlow = stimuli.dotspatial(o.winPtr);   % dots flow stimulus
-         o.FlowHistory = zeros(o.MaxFrame,5,300);
+         o.FlowHistory = zeros(o.MaxFrame,6,300);
          
     end
    
@@ -122,6 +124,10 @@ classdef PR_DotsflowTesting < handle
         if (o.state < 1) % as the flow finishes its presentation, state turns to 1 from 0
             keepgoing = 1;
         end
+        if (o.FrameCount)
+           o.FlowHistory(o.FrameCount,6,:) = screenTime;  %store screen flip 
+        end
+   
     end
    
     %******************** THIS IS THE BIG FUNCTION *************

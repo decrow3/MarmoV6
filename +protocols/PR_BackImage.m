@@ -23,6 +23,8 @@ classdef PR_BackImage < handle
     ImageFile = [];
     imo = [];  % matlab image struct
     grayscale = false
+
+    Flashtime = [];
   end
   
   methods (Access = public)
@@ -62,13 +64,14 @@ classdef PR_BackImage < handle
     end
     
     function P = next_trial(o,S,P)
+            o.Flashtime = [];
           %********************
           o.S = S;
           o.P = P;       
           %*******************
           flist = dir([o.ImageDirectory,filesep,'*.*']);
           fext = cellfun(@(x) x(strfind(x, '.'):end), {flist.name}, 'uni', 0);
-          isimg = cellfun(@(x) any(strcmp(x, {'.bmp', '.png', '.jpg', '.JPG', '.PNG'})), fext);
+          isimg = cellfun(@(x) any(strcmp(x, {'.bmp', '.png', '.jpg', '.jpeg', '.JPG', '.PNG'})), fext);
           flist = flist(isimg);
           
           o.closeFunc();  % clear any remaining images in memory
@@ -82,6 +85,17 @@ classdef PR_BackImage < handle
              o.imo = imread(o.ImageFile);
              
              % image can't be bigger than screen. Don't waste texture size?
+             [rows,cols,~]=size(o.imo);
+             [asp,rc]=min([rows,cols]./S.screenRect([4 3]));
+             if rc==1 %crop cols
+                ncols=round(S.screenRect([3])*asp);
+                cut=(cols-ncols)/2;
+                o.imo=o.imo(:,cut:end-cut,:);
+             elseif rc==2 %crop rows
+                nrows=round(S.screenRect([4])*asp);
+                cut=(rows-nrows)/2;
+                o.imo=o.imo(cut:end-cut,:,:);
+             end
              o.imo = imresize(o.imo, S.screenRect([4 3]));
              
              if o.grayscale
@@ -130,6 +144,13 @@ classdef PR_BackImage < handle
    
     %******************** THIS IS THE BIG FUNCTION *************
     function drop = state_and_screen_update(o,currentTime,x,y,varargin) 
+         if ~isempty(varargin)
+             inputs=varargin{1};
+             if length(varargin)>1
+                outputs=varargin{2};
+             end
+         end 
+
         drop = 0;
         %******* THIS PART CHANGES WITH EACH PROTOCOL ****************
         if o.state == 0 && currentTime > o.startTime + o.P.imageDur
@@ -141,16 +162,41 @@ classdef PR_BackImage < handle
         % STATE SPECIFIC DRAWS
         switch o.state
            case 0
-            if isfield(o.S,'stereoMode') && o.S.stereoMode>0
-                Screen('SelectStereoDrawBuffer', o.winPtr, 0);
-                Screen('DrawTextures',o.winPtr,o.ImoScreen,o.ImoRect,o.ScreenRect)  % draw
-                Screen('SelectStereoDrawBuffer', o.winPtr, 1);
-                Screen('DrawTextures',o.winPtr,o.ImoScreen,o.ImoRect,o.ScreenRect)  % draw
-            else
-                Screen('DrawTextures',o.winPtr,o.ImoScreen,o.ImoRect,o.ScreenRect) 
-            end
+            Screen('DrawTextures',o.winPtr,o.ImoScreen,o.ImoRect,o.ScreenRect)  
         end 
         %**************************************************************
+
+%         %% PHOTODIODE FLASH, move to frame control/ output(?)
+%         %DPR - 5/5/2023
+        if isfield(o.S,'photodiode')
+            if ~isempty(o.S.outputs)
+                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
+            else
+                dpout=0;
+            end
+            FrameEst=round((o.startTime-currentTime)*o.S.frameRate);
+            if rem(FrameEst,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
+                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
+                
+                %Should be <20 so shouldn't need to preallocate but..
+                o.Flashtime=[o.Flashtime; currentTime];
+
+                if dpout
+                    %ttl4 high
+                    outputs{dpout}.flipBitVideoSync(4,1)
+                end
+            else
+                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
+                if dpout
+                    %ttl4 low
+                    outputs{dpout}.flipBitVideoSync(4,0)
+                end
+            end
+       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
+        end
+
+
+
     end
     
     function Iti = end_run_trial(o)
@@ -203,6 +249,7 @@ classdef PR_BackImage < handle
         PR.imageOff = o.imageOff;
         PR.imagefile = o.ImageFile;   % file name, if you want to load later
         PR.destRect = o.ScreenRect;
+        PR.Flashtime = o.Flashtime;
     end
     
   end % methods

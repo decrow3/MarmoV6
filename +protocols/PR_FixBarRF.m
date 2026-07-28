@@ -69,7 +69,6 @@ classdef PR_FixBarRF < handle
     FixMax = 20;        % maximum fixations in any trial
     %**** Photodiode flash timing
     Flashtime = [];
-    FlashOutTimings = [];
     %**********************************
     D = struct;        % store PR data for end plot stats
   end
@@ -270,6 +269,15 @@ classdef PR_FixBarRF < handle
     %******************** THIS IS THE BIG FUNCTION *************
     function drop = state_and_screen_update(o,currentTime,x,y,varargin)  
         drop = 0;
+        if ~isempty(varargin)
+            inputs=varargin{1};
+            if length(varargin)>1
+                outputs=varargin{2};
+            end
+        end
+        
+        
+        
         %******* THIS PART CHANGES WITH EACH PROTOCOL ****************
 
         %%%%% STATE 0 -- GET INTO FIXATION WINDOW %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -425,7 +433,7 @@ classdef PR_FixBarRF < handle
                 o.Bars.beforeFrame();
                 o.hFix.beforeFrame(3); %Continue showing the black fixation dot?
 
-                    if o.FrameCount>0
+                    if o.PFrameCount>0 && ~isempty(o.Bars.prefori)
                     %Params for saving
                       o.ProbeHistory(o.FrameCount,1) = o.Bars.position(1);
                        o.ProbeHistory(o.FrameCount,2) = o.Bars.position(2);
@@ -480,9 +488,7 @@ classdef PR_FixBarRF < handle
         end
         %**************************************************************
 
-%         %% PHOTODIODE FLASH, move to frame control/ output(?)
-%         This is gross, this is why we have independant outputs
-%         %DPR - 5/5/2023
+      %         %DPR - 5/5/2023
         if isfield(o.S,'photodiode')
             if ~isempty(o.S.outputs)
                 dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
@@ -492,34 +498,30 @@ classdef PR_FixBarRF < handle
                 ardout=0;
             end
 
-            if rem(o.PFrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
+            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)<=4 % first frame flash photodiode
                 Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
                 
                 %Should be <20 so shouldn't need to preallocate but..
                 o.Flashtime=[o.Flashtime; currentTime];
 
                 if dpout
-                    %ttl-4 high
-                    timings=outputs{dpout}.flipBitNoSync(4,1);
+                    %ttl4 high
+                    outputs{dpout}.flipBitVideoSync(4,1);
                 elseif ardout
-                    %ttl-4 high
-                    timings=outputs{ardout}.flipBit(4,1);
-                else
-                    timings=[];
+                    %ttl4 high
+                    outputs{ardout}.flipBit(4,1); %pin 11? should be most sig bit
                 end
-                %Should be <20 so shouldn't need to preallocate but..
-                o.FlashOutTimings=[o.FlashOutTimings; timings];
-            else % Send every frame? This seems really unnecessary, and may slow things down
+            else
                 Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
                 if dpout
                     %ttl4 low
-                    [~]=outputs{dpout}.flipBitNoSync(4,0);
+                    outputs{dpout}.flipBitVideoSync(4,0);
                 elseif ardout
-                    %ttl-4 low
-                    [~]=outputs{ardout}.flipBit(4,0);
+                    %ttl4 high
+                    outputs{ardout}.flipBit(4,0);
                 end
             end
-       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
+            % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
         end
     end
     
@@ -570,7 +572,7 @@ classdef PR_FixBarRF < handle
 
         %Photodiode
         PR.Flashtime = o.Flashtime;
-        PR.FlashOutTimings = o.FlashOutTimings;
+
         
         %%%% Plot results %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Dataplot 1, errors

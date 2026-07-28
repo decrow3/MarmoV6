@@ -84,7 +84,7 @@ P.eyeRadius = 1.2;
 S.eyeRadius = 'Gaze indicator radius (degrees):';
 P.eyeIntensity = 20;
 S.eyeIntensity = 'Indicator intensity:';
-P.showEye = 1;
+P.showEye = 0;
 S.showEye = 'Show the gaze indicator? (0 or 1):';
 
 % Windows

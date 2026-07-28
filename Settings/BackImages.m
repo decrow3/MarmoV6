@@ -16,7 +16,7 @@ S.finish = 80;
 % PROTOCOL PREFIXS
 S.protocol = 'BackImages';
 S.protocol_class = ['protocols.PR_',S.protocol];
-S.ImageDirectory = 'NaturalImages';%'Backgrounds';  % default is Backgrounds directory
+S.ImageDirectory = 'Doves';%'Backgrounds';  % default is Backgrounds directory
                                    % but you can easily choose another
                                    % and place it under SupportData
   
@@ -56,7 +56,7 @@ P.showEye = 0;
 S.showEye = 'Show the gaze indicator? (0 or 1):';
 P.bkgd = 127;
 S.bkgd = 'Choose the background color (0-255):';
-P.nImages = 104;
+P.nImages = 101;
 S.nImages = 'Number of images to load up';
 
 P.useGrayScale = true;

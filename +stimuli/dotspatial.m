@@ -197,11 +197,11 @@ classdef dotspatial < stimuli.stimulus
             obj.tempx(idx) = obj.x(idx);
 
             obj.dx(idx) = xshift;
-            obj.dy(idx) = yshift;
+            %obj.dy(idx) = yshift;
 
             
             % passive viewing condition 
-            %obj.dy(idx) =  - obj.speed *obj.pixPerDeg* 0.01667; % 1./frameRate
+            obj.dy(idx) =  - obj.speed *obj.pixPerDeg* 0.01667; % 1./frameRate
 
             % temp rotation calculation
             obj.y(idx) = obj.tempx(idx).* sin(deg2rad(obj.dth)) + obj.tempy(idx).*(cos(deg2rad(obj.dth)));
@@ -221,8 +221,8 @@ classdef dotspatial < stimuli.stimulus
         function moveDots(obj, xshift, yshift)
             
             obj.dx= xshift;
-            obj.dy = yshift;
-            %obj.dy =  - obj.speed *obj.pixPerDeg* 0.01667;
+            %obj.dy = yshift;
+            obj.dy =  - obj.speed *obj.pixPerDeg* 0.01667;
 
             % calculate future position
             obj.xr = obj.xr + obj.dx;

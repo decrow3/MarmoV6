@@ -82,7 +82,7 @@ classdef treadmill_arduino < matlab.mixin.Copyable
                         self.nextReward = self.nextReward + self.rewardDist;
                     end  
                 case 'distProb'
-                    if self.locationSpace(self.frameCounter, 4) > self.nextReward
+                    if abs(self.locationSpace(self.frameCounter, 4)) > self.nextReward
                         tmp = double(rand < self.rewardProb);
                         self.locationSpace(self.frameCounter,5) = self.locationSpace(self.frameCounter,5) + tmp; % add one drop
                         if tmp == 1

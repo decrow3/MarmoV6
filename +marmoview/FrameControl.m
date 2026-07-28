@@ -67,7 +67,7 @@ classdef FrameControl < matlab.mixin.Copyable & handle
       %*************
       o.TimeSensitive = [];  %no states time sensitive by default
       %*************
-      o.FMAX = 5000;  %capped at a Max of 5000 screen flips
+      o.FMAX = 115510;%5000;  %capped at a Max of 5000 screen flips
       o.FIELDS = 9;
       o.FData = nan(o.FMAX,o.FIELDS);   %per trial data storage
       o.FCount = 0;
@@ -104,7 +104,7 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         o.frameRate = S.frameRate;
         o.scr_gamma = S.gamma;
         o.persistence = S.persistence; %Flag for holding stimuli on screen between trials
-        o.FMAX = ceil(60*o.frameRate); % max trial is 20 seconds, regardless of framerate
+        o.FMAX = 115500;%ceil(60*o.frameRate); % max trial is 20 seconds, regardless of framerate
         o.centerPix = S.centerPix;
         o.pixPerDeg = S.pixPerDeg;
         

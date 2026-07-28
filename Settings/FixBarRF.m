@@ -46,7 +46,7 @@ P.Radius = 4.0;
 S.Radius = 'Bar window radius(degs):';
 P.barwidth = .25;  % radius of target is dva
 S.barwidth = 'Width of bars(deg):';
-P.nFramesPerStim = 1;  % 
+P.nFramesPerStim = 5;  % 
 S.nFramesPerStim = 'n screen frames per stimulus frame:';
 P.nSecondsPreGen = 400; %40 ten second trials  
 S.nSecondsPreGen = 'seconds of stim frames to prerender';
@@ -85,11 +85,11 @@ P.eyeRadius = 1.2;
 S.eyeRadius = 'Gaze indicator radius (degrees):';
 P.eyeIntensity = 20;
 S.eyeIntensity = 'Indicator intensity:';
-P.showEye = 1;
+P.showEye = 0;
 S.showEye = 'Show the gaze indicator? (0 or 1):';
 
 % Windows
-P.fixWinRadius = 0.15;
+P.fixWinRadius = 0.25;
 S.fixWinRadius = 'Fixation window radius (deg):';
 
 % Trial timing

@@ -2,7 +2,7 @@ classdef PR_FixRetRF < handle
   % Matlab class for running an experimental protocl
   %
   % The class constructor can be called with a range of arguments:
-  % TODO: ADD DRIFTING DOTS CARRIER
+  %
   
   properties (Access = public) 
        Iti double = 1;            % default Iti duration

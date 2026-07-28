@@ -18,7 +18,12 @@ void setup() {
   pinMode(12, OUTPUT);    // sets the digital pin 12 as output
   pinMode(11, OUTPUT);    // sets the digital pin 11 as output
   pinMode(10, OUTPUT);    // sets the digital pin 10 as output
-
+  
+  //initialise low
+  digitalWrite(11,0);
+  digitalWrite(11,0);
+  digitalWrite(11,0);
+  digitalWrite(11,0);
 
 }
 
@@ -106,27 +111,33 @@ void loop() {
           //4th pin, 1000,
             digitalWrite(13,setbit);
             itoa(setbit,&state[0],10);
+            break;
           case 1:
           //3rd pin, 0100,
             digitalWrite(12,setbit);
             itoa(setbit,&state[1],10);
+            break;
           case 2:
           //2nd pin, 0010,
             digitalWrite(11,setbit);
             itoa(setbit,&state[2],10);
+            break;
           case 3:
           //1st pin, 0001,
             digitalWrite(10,setbit);
             itoa(setbit,&state[3],10);
+            break;
         }
-        //Serial.print("String to send: ");
+        //Serial.print("Location: ");
+        //Serial.println((Maskedloc[bit])); 
+        //Serial.print("Set: ");
         //Serial.println((setbit));  
         
     }
 
   //TODO, Make this MarmoV6 compatible, sending a reply without reading in matlab messes with blocking on receiving 
   //Serial.print("State on all pins: ");
-  //Serial.println((state));
+ // Serial.println((state));
 
   }
 }

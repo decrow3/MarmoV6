@@ -50,6 +50,7 @@ classdef PR_FixedProceduralNoise < protocols.protocol
     y0=0;
     ds=0;
     threshold=.25;
+    tfix=[];
     %**********************************
     D struct = struct()        % store PR data for end plot stats, will store dotmotion array
   end
@@ -437,7 +438,7 @@ classdef PR_FixedProceduralNoise < protocols.protocol
             % State 0 -- Prep, prestimulus
             % State 1 -- Fixating somewhere on screen
             % State 2 -- Fixation broken (refresh stimuli)
-            % State 5??? Don't continue to refresh stimuli until saccade
+            % State 1.5??? Don't continue to refresh stimuli until saccade
                        % finishes
 
             % State 3 -- ???? faces
@@ -950,16 +951,19 @@ classdef PR_FixedProceduralNoise < protocols.protocol
 
         % If fixation is broken move to state 2, unless already in it:
         if o.state ==2
-            o.state = 1.5; % pull into holding state, so stimuli only changes once
+            o.state = 1.5; % pull into holding state, so stimuli only changes once per saccade
+            %still draw in this state
+
         end
 
         %First check if there is any fixation
         if (o.ds>o.threshold)&&(o.state~=1.5) %eye is moving
             o.state = 2; %Saccade: change stimuli
+            o.tfix=currentTime;
         end
 
         %If fixating again, return to normal state
-        if (o.state == 1.5)&&(o.ds<=o.threshold)
+        if (o.state == 1.5)&&(o.ds<=o.threshold)&&(currentTime-o.tfix>0.100)
             o.state = 1; % drop back to state 1
         end
 
@@ -1036,15 +1040,20 @@ classdef PR_FixedProceduralNoise < protocols.protocol
 
 
 %         %% PHOTODIODE FLASH, move to frame control/ output(?)
+%         This is gross, this is why we have independant outputs
 %         %DPR - 5/5/2023
         if isfield(o.S,'photodiode')
             if ~isempty(o.S.outputs)
                 dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
+                ardout=find(cellfun(@(x) strcmp(x,'output_arduino'), o.S.outputs));
+                ljout=find(cellfun(@(x) strcmp(x,'output_labjackU12'), o.S.outputs));
             else
                 dpout=0;
+                ardout=0;
+                ljout=0;
             end
-
-            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
+            
+            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)<=1 % first frame flash photodiode
                 Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
                 
                 %Should be <20 so shouldn't need to preallocate but..
@@ -1052,16 +1061,27 @@ classdef PR_FixedProceduralNoise < protocols.protocol
 
                 if dpout
                     %ttl4 high
-                    outputs{dpout}.flipBitVideoSync(4,1)
+                    outputs{dpout}.flipBitVideoSync(4,1);
+                elseif ardout
+                    %ttl4 high
+                    outputs{ardout}.flipBit(4,1); %pin 11? should be most sig bit
+                elseif ljout
+                    %IO3 (forth bit) high
+                    outputs{ljout}.flipBit(4-1,1); %
                 end
             else
                 Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
                 if dpout
                     %ttl4 low
-                    outputs{dpout}.flipBitVideoSync(4,0)
+                    outputs{dpout}.flipBitVideoSync(4,0);
+                elseif ardout
+                    %ttl4 high
+                    outputs{ardout}.flipBit(4,0);
+                elseif ljout
+                    %IO3 (forth bit) high
+                    outputs{ljout}.flipBit(4-1,0);
                 end
             end
-       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
         end
     end
     
