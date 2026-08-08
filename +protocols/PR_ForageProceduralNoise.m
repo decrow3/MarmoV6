@@ -322,6 +322,27 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                     'randomizePhase', false); % DO NOT RANDOMISE PHASE
               % o.hNoise.updateEveryNFrames = ceil(S.frameRate / P.noiseFrameRate);
                o.hNoise.updateTextures(); % create the procedural texture
+
+          case 14 % Full-field static Hartley plaid
+               hp_K = P.hp_K;
+               o.NoiseHistory = nan(o.MaxFrame, 1 + 1 + 4*hp_K);  % [time | K | (fx fy amp idx) x K]
+
+               equalStride = false;
+               if isfield(P, 'equalStride')
+                   equalStride = P.equalStride;
+               end
+
+               o.hNoise = stimuli.hartleyplaid_procedural(o.winPtr, ...
+                   'screenRect', S.screenRect, ...
+                   'pixPerDeg',  S.pixPerDeg, ...
+                   'frameRate',  S.frameRate, ...
+                   'maxSF',      P.hp_maxSF, ...
+                   'K',          hp_K, ...
+                   'ns',         P.hp_ns, ...
+                   'equalStride', equalStride, ...
+                   'contrast',   P.noiseContrast, ...
+                   'updateEveryNFrames', ceil(S.frameRate / P.noiseFrameRate), ...
+                   'bgGrey',     S.bgColour);
                
        end
        %**********************************************************
@@ -647,6 +668,29 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                          % time, orientation, cpd, phase, direction, speed, contrast
                      end
 
+                  case 14 % Full-field static Hartley plaid
+                     o.hNoise.afterFrame(); % update internal counters
+                     if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                         o.hNoise.beforeFrame();
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                         o.hNoise.beforeFrame();
+                     else
+                        o.hNoise.beforeFrame();
+                     end
+                     %**********
+                     o.FrameCount = o.FrameCount + 1;
+
+                     nK  = o.hNoise.K;
+                     amp = o.hNoise.current.amp(:);
+                     fx  = o.hNoise.current.fx(:);
+                     fy  = o.hNoise.current.fy(:);
+                     idx = o.hNoise.current.idx(:);
+                     row = [nK, fx.', fy.', amp.', double(idx.')];
+
+                     % NOTE: store screen time in "continue_run_trial" after flip.
+                     o.NoiseHistory(o.FrameCount, 2:(1+numel(row))) = row;
+
                      
              end
             %****************
@@ -789,6 +833,13 @@ classdef PR_ForageProceduralNoise < protocols.protocol
         if currentTime > o.startTime + o.TrialDur
             o.state = 4;  % time to end trial
             o.itiStart = GetSecs;
+            if isa(o.hNoise, 'stimuli.hartleyplaid_procedural')
+                try
+                    Screen('ColorRange', o.hNoise.winPtr, o.hNoise.oldmaximumvalue, ...
+                        o.hNoise.oldclampcolors, o.hNoise.oldapplyToDoubleInputMakeTexture);
+                catch
+                end
+            end
             return
         end
         %***********************
@@ -919,6 +970,9 @@ classdef PR_ForageProceduralNoise < protocols.protocol
         PR = struct;
         if isa(o.hNoise, 'stimuli.stimulus')
             PR.hNoise = copy(o.hNoise); % store noise object
+            if isa(o.hNoise, 'stimuli.hartleyplaid_procedural')
+                PR.hNoise.bank = []; % too big to store on every trial
+            end
         end
         
         PR.error = o.error;
