@@ -1,5 +1,5 @@
-function [S,P] = Repeating_GarboriumNoise()
-
+function [S,P] = PregenRepeating_GarboriumNoise()
+%Tested on Rocky and used for Lukes experiments
 %%%% NECESSARY VARIABLES FOR GUI
 %%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -13,10 +13,10 @@ S = MarmoViewRigSettings;
 S.MarmoViewVersion = '6';
 
 % PARAMETER DESCRIBING TRIAL NUMBER TO STOP TASK
-S.finish = 150;
+S.finish = 150;%150=30mins
 
 % PROTOCOL PREFIX
-S.protocol = 'ForageRepeatingNoise';
+S.protocol = 'ForagePregenRepeatingNoise';
 % PROTOCOL PREFIXS
 S.protocol_class = ['protocols.PR_',S.protocol];
 
@@ -165,7 +165,7 @@ switch P.noisetype
         %*************
         
     case 4 % Garborium noise (based off "ProceduralGarboriumDemo")
-        P.spfmin = 2;  % will be [0.5 1 2 4 8 16]
+        P.spfmin = 0.5;  % will be [0.5 1 2 4 8 16], was 2 before Oct2025
         S.spfmin = 'Minimum spat freq (cyc/deg):';
         
         P.noiseCenterX = 0;
@@ -174,25 +174,32 @@ switch P.noisetype
         P.noiseCenterY = 0;
         S.noiseCenterY = 'Center of the noise patch (d.v.a):';
         
-        P.noiseRadius = 30;
+        P.noiseRadius = 40;%30
         S.noiseRadius = 'width of the noise patch (d.v.a):';
         
-        P.numGabors = 1800;
+        P.numGabors = 1*1800; %8*1800 for Luke
         S.numGabors = 'Number of Gabors:';
         
-        P.spfrange = 15;   % use log spacing
+        P.spfrange = 15.5;   %previously 15 % use log spacing
         S.spfrange = 'Range of spat freqs (cyc/deg):';
+        % used in:
+        %(rnd(3,:)*obj.sfRange + obj.minSF)/obj.pixPerDeg; 
+        % linear scale??
         
         P.noiseFrameRate = 60;
         S.noiseFrameRate = 'frame rate of the noise background:';
         
-        P.noiseContrast = 2.0;
+        %Note, tests done with 14400 Gabors at noiseRadius 40
+        %0.65 contrast ->0.65% clipping, used for Luke
+        %0.75 contrast ->1.3% clipping
+        %0.85 contrast ->2.4% clipping
+        P.noiseContrast = 2.0;% Changed from 2.0 on 10/31/2025;0.5 is good, only 1 or 2 pixels sat but its a bit dim
         S.noiseContrast = 'Contrast of the noise (0-1):';
         
         P.minScale = .1;
         S.minScale = 'minimum width (stdev) of gabors (d.v.a):';
         
-        P.scaleRange = .15;
+        P.scaleRange = .25;% was .15
         S.scaleRange = 'range of stdevs (d.v.a):';
         
     case 5 % spatial noise dots (using DrawDots)

@@ -14,7 +14,7 @@ S = MarmoViewRigSettings;
 S.MarmoViewVersion = '6';
 
 % PARAMETER DESCRIBING TRIAL NUMBER TO STOP TASK
-S.finish = 800;
+S.finish = 100;
 
 % PROTOCOL PREFIX
 S.protocol = 'Forage';
@@ -201,7 +201,7 @@ if (P.noisetype == 5)
     S.snoisenum = 'Number of noise ovals:';
     P.snoisediam = 1.0; %2.0; %1.0;  % diameter in dva of noise oval
     S.snoisediam = 'Diameter of noise ovals (dva): ';
-    P.snoiselife = 6;  % lifetime in video frames
+    P.snoiselife = 12;  % lifetime in video frames, 6 for 120Hz 
     S.snoiselife = 'Lifetime in frames';
     P.snoisespeed = 15;  % motion speed
     S.snoisespeed = 'Speed of dot';

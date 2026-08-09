@@ -1,5 +1,5 @@
 
-function [S,P] = Forage13_TFsep_DriftingGratings()
+function [S,P] = Forage14_SFTFx4_DriftingGratings()
 
 %%%% NECESSARY VARIABLES FOR GUI
 %%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -46,7 +46,7 @@ S.protocolTitle = 'Foraging with back mapping';
 % Reward setting
 P.rewardNumber = 1;   % Max juice, only one drop ... it is so easy!
 S.rewardNumber = 'Number of juice pulses to deliver:';
-P.CycleBackImage = 5;
+P.CycleBackImage = 50;
 S.CycleBackImage = 'If def, backimage every # trials:';
 
 %******* trial timing and reward
@@ -54,7 +54,7 @@ P.holdDur = 0.9;%0.10;
 S.holdDur = 'Duration at grating for reward (s):';
 P.fixRadius = 0.25;%2.5;  
 S.fixRadius = 'Probe reward radius(degs):';
-P.trialdur = 10; 
+P.trialdur = 23; %Each grating is on (and off) for 2.33s, need to stop trial during last off period
 S.trialdur = 'Trial Duration (s):';
 P.iti = 0.5;
 S.iti = 'Duration of intertrial interval (s):';
@@ -70,9 +70,9 @@ P.faceTime = 0.1;  % duration of flashed face, in ms
 S.faceTime = 'Duration of Face Flash (s):';
 
 %************** Probe properties
-P.proberadius = 0.2;%1.0;  % radius of target is dva
+P.proberadius = 1.0;  % radius of target is dva
 S.proberadius = 'Size of Target(dva):';
-P.probecon =  0.50;% 1.0;
+P.probecon =  0;1.0;
 S.probecon = 'Transparency of Probe (1-none, 0-gone):';
 P.proberange = 48; %a bit brighter
 S.proberange = 'Luminance range of grating (1-127):';
@@ -110,26 +110,26 @@ P.showEye = 0;
 S.showEye = 'Show the gaze indicator? (0 or 1):';
 
 %***** FORAGE CAN ACCEPT DIFFERENT BACKGROUND TYPES *****
-P.noisetype = 10; % this corresponds to what PR_ForageProceduralNoise does
+P.noisetype = 11; % this corresponds to what PR_ForageProceduralNoise does
 S.noisetype = 'Cannot change during protocol';
 
 % switch P.noisetype
 %         
-%     case 10 % drifting gratings
+%     case 11 % drifting gratings
         P.numDir = 4;
         S.numDir = 'Number of directions to draw from:';
 
-        P.GratSFmin = 0.5;  % will be [0.5 1 2 4 8]
+        P.GratSFmin = 0.5;  % will be [0.5 2 8]
         S.GratSFmin = 'Minimum spat freq (cyc/deg):';
         
-        P.GratNumOct = 5;   % use log spacing
-        S.GratNumOct = 'Num Spat Freq Octaves:';
+        P.GratNumOct = 3;   % use log spacing
+        S.GratNumOct = 'Num Spat Freqs:';
 
-        P.GratTFmin = 0.5;  % will be [0.5 1 2 4 8]
+        P.GratTFmin = 0.5;  % will be [0.5 2 8]
         S.GratTFmin = 'Minimum temp freq (cyc/deg):';    
         
-        P.nTFs = 5;
-        S.nTFs = 'Num Temp Freq Octaves:';
+        P.nTFs = 3;
+        S.nTFs = 'Num Temp Freqs:';
 
         P.GratCtrX = 0;
         S.GratCtX = 'Grating Position X (d.v.a. from center):';

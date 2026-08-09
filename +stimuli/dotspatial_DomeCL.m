@@ -1,4 +1,4 @@
-classdef dotspatialReplay < stimuli.stimulus
+classdef dotspatial_DomeCL < stimuli.stimulus
     %DOTSPATIALNOISE uses the dots class for spatiotemporal reverse
     %correlation
     %   Detailed explanation goes here
@@ -23,7 +23,6 @@ classdef dotspatialReplay < stimuli.stimulus
     properties (GetAccess = public, SetAccess = {?stimuli.stimulus})
         % also the initialization of the fundemental parameters 
         % cartessian coordinates in drawdots 
-
         x % x coords (pixels)
         y % y coords (pixels)
         z % z coords (pixels)
@@ -41,6 +40,7 @@ classdef dotspatialReplay < stimuli.stimulus
         h = 120;
         yr % y distance in reality 
         xr % x distance in reality 
+        zr
         
         % change of displacements
         dx % x direction translation 
@@ -68,7 +68,7 @@ classdef dotspatialReplay < stimuli.stimulus
     end
 
     methods
-        function obj = dotspatialReplay(winPtr, varargin)
+        function obj = dotspatial_DomeCL(winPtr, varargin)
 
             obj = obj@stimuli.stimulus();
             obj.winPtr = winPtr;
@@ -82,17 +82,17 @@ classdef dotspatialReplay < stimuli.stimulus
             ip.StructExpand = true;
             ip.addParameter('size',10.0); % pixels?
             ip.addParameter('speed',0.02); % deg./s
-            ip.addParameter('direction',90.0,@(x) isscalar(x) && isreal(x)); % deg.
+            ip.addParameter('direction',180.0,@(x) isscalar(x) && isreal(x)); % deg.
             ip.addParameter('numDots',300,@(x) ceil(x));
             ip.addParameter('lifetime',Inf);
-            ip.addParameter('maxRadius',10.0); % deg.
+            ip.addParameter('maxRadius',25.0); % deg.
             
             ip.addParameter('position',[0.0,0.0],@(x) isvector(x) && isreal(x)); % [x,y] (pixels)
             
             ip.addParameter('color',[0,0,0]);
             ip.addParameter('visible',true)
             ip.addParameter('contrast', .5)
-            ip.addParameter('updateEveryNFrames', 3)
+            ip.addParameter('updateEveryNFrames', 1)
             ip.addParameter('frameUpdate', 0)
             ip.addParameter('sigma', inf)
           
@@ -135,104 +135,139 @@ classdef dotspatialReplay < stimuli.stimulus
                 obj.setRandomSeed();
             end
 
-            %obj.initDots(1:obj.numDots,0,0);
+            obj.initDots(1:obj.numDots,0,0,0);
 
 
             % frameUpdate needs to be 0 for init to work
-            % set the frame update counter
             obj.frameUpdate = 0;
 
+            % call parent function (calls initDots)
+            %beforeTrial@stimuli.dotsbase(obj)
+
+            if obj.lifetime ~= Inf
+                obj.frameCnt = randi(obj.rng, obj.lifetime,obj.numDots,1); % 1:numDots
+            else
+                obj.frameCnt = inf(obj.numDots,1);
+            end
+
         end
 
-        function beforeFrame(obj,replayx,replayy,replaycolor)
-            obj.drawDots(replayx,replayy,replaycolor);
+        function beforeFrame(obj)
+            obj.drawDots();
         end
 
-        function afterFrame(obj)
+        function afterFrame(obj,xshift,yshift,rshift)
         
-            %obj.moveDots(xshift,yshift)
+            obj.moveDots(xshift,yshift,rshift)
 
             obj.frameUpdate = mod(obj.frameUpdate +1, obj.updateEveryNFrames);
 
         end
 
 
-        function initDots(obj, idx, xshift, yshift)
+        function initDots(obj, idx, xshift, yshift,rshift)
             %INITDOTS random x,y values for the dots - not coordinates yet 
             % These values are unitless? Should be centimeters in 'real'
             % world
-%             n = numel(idx);
-%             
-%             %elseif n == obj.numDots
-% %                 obj.x(idx) = rand(obj.rng, 1, n) * obj.winRect(3) + -obj.winRect(3)/2;
-% %                 obj.y(idx) = rand(obj.rng, 1, n) * obj.winRect(4); 
-%                 obj.x(idx) = (rand(obj.rng, 1, n)-0.5) * 300; %3 m wide plain
-%                 obj.y(idx) = rand(obj.rng, 1, n) * 300; % seeing 3m into horizon 
-% 
-%              for i = 1:n     
-%                 if idx(i)<= 225
-%                     obj.z(i) = 0;
-%                 elseif idx(i) > 225 
-%                     obj.z(i) = round((rand(1))*200);
-%                     
-%                 end 
-%              end 
-%                  
-%                     %obj.z(idx) = 0;
-%                 
-%                 %obj.z(idx)=[zeros(1,0.85*n) round((rand(1,0.15*n))*200)];
-%                 % Heights of dots are either ground (0) 85%, or random
-%                 % 0-200cm 15% of the time
-%               
-%             %end
-% 
-%            
-%             obj.yr(idx)  = obj.y(idx);
-%             obj.xr(idx)  = obj.x(idx);
-%            
-%             obj.a(idx) = rad2deg(atan((obj.y(idx))./(- obj.z(idx) + 15)));
-%             obj.b(idx) = rad2deg(atan(obj.x(idx)./obj.y(idx)));
-% 
-%             obj.y(idx) = 2*(obj.a(idx)./90 -sign(obj.a(idx)))* obj.winRect(4)/2 + 10;
-%             obj.x(idx) = 2*obj.b(idx)./90 * obj.winRect(3)/2;
-% 
-%             obj.tempy(idx) = obj.y(idx);
-%             obj.tempx(idx) = obj.x(idx);
-% 
-%             obj.dx(idx) = 0;
-%             obj.dy(idx) = 0;
-%             
-%             obj.dx(idx) = xshift;
-%             obj.dy(idx) = yshift;
-% 
-%             
-%             % 
-%             %obj.dy(idx) =  - obj.speed *obj.pixPerDeg* 0.01667; % 1./frameRate
-% 
-%             % temp rotation calculation
-%             obj.y(idx) = obj.tempx(idx).* sin(deg2rad(obj.dth)) + obj.tempy(idx).*(cos(deg2rad(obj.dth)));
-%             obj.x(idx) = obj.tempx(idx).* cos(deg2rad(obj.dth)) - obj.tempy(idx).*(sin(deg2rad(obj.dth)));
-%             
-% 
-%             if n == obj.numDots
-%                 obj.color = 127 + round(obj.contrast*127*[1; 1; 1]*sign( (rand(obj.rng, 1, n)<.5)-.5));
-%             else
-%                 obj.color(:,idx) = 127 + round(obj.contrast*127*[1; 1; 1]*sign( (rand(obj.rng, 1, n)<.5)-.5));
-%             end
+            n = numel(idx);
+            
+            obj.x(idx) = (rand(obj.rng, 1, n)-0.5) * 300; %3 m wide plain
+            obj.y(idx) = rand(obj.rng, 1, n) * 300; % seeing 3m into horizon 
+
+            if isempty(obj.z)
+             for i = 1:n     
+                if idx(i)<= 225
+                    obj.z(i) = 0;
+                elseif idx(i) > 225
+                    obj.z(i) = round((rand(1))*200);
+                    
+                end 
+             end 
+            end 
+            
+            obj.yr(idx)  = obj.y(idx);
+            obj.xr(idx)  = obj.x(idx);
+
+            obj.a(idx) = rad2deg(atan((obj.y(idx))./(- obj.z(idx) + 15)));
+            obj.b(idx) = rad2deg(atan(obj.x(idx)./obj.y(idx)));
+
+            obj.y(idx) = 2*(obj.a(idx)./90 -sign(obj.a(idx)))* obj.winRect(4)/2 + 10;
+            obj.x(idx) = 2*obj.b(idx)./90 * obj.winRect(3)/2;
+
+            obj.tempy(idx) = obj.y(idx);
+            obj.tempx(idx) = obj.x(idx);
+
+            obj.dx(idx) = xshift;
+            obj.dy(idx) = yshift;
+            obj.dr(idx) = rshift;
+
+            
+            % passive viewing condition 
+            %obj.dy(idx) =  - obj.speed *obj.pixPerDeg* 0.01667; % 1./frameRate
+         
+
+            if n == obj.numDots
+                obj.color = 127 + round(obj.contrast*127*[1; 1; 1]*sign( (rand(obj.rng, 1, n)<.5)-.5));
+            else
+                obj.color(:,idx) = 127 + round(obj.contrast*127*[1; 1; 1]*sign( (rand(obj.rng, 1, n)<.5)-.5));
+            end
+
         end
 
-        function moveDots(obj, xshift, yshift)
-           % empty for replay 
+        function moveDots(obj, xshift, yshift,rshift)
+            
+            obj.dx= xshift;
+            obj.dy = yshift;
+            obj.dr = rshift;
+            obj.dth = deg2rad(obj.dr);
+            %obj.dy =  - obj.speed *obj.pixPerDeg* 0.01667;
+
+            % calculate future position
+            obj.xr = obj.xr + obj.dx;
+            obj.yr = obj.yr + obj.dy;
+            
+            % rotate - along z-axis in reality (height) 
+            obj.xr = obj.xr.*(cos(obj.dth)) - obj.yr.*(sin(obj.dth));
+            obj.yr = obj.xr.*(sin(obj.dth)) + obj.yr.*(cos(obj.dth));
+            obj.zr = obj.z;
+
+            idx_yr = find(obj.yr >= 300)'; 
+            if ~isempty(idx_yr)         
+                % (re-)place dots randomly within the aperture
+                obj.initDots(idx_yr,xshift,yshift,rshift);
+            end  
+
+            obj.a = rad2deg(atan(obj.yr./(-obj.zr + 15)));
+            obj.b = rad2deg(atan(obj.xr./obj.yr));
+            
+            obj.y = 2*(obj.a./90-sign(obj.a)) * obj.winRect(4)/2 + 10;
+            obj.x = 2*obj.b./90 * obj.winRect(3)/2;
+
+            obj.tempy = obj.y;
+            obj.tempx = obj.x;
+            
+            win = [obj.winRect(3)/2, obj.winRect(4)./2];
+            
+            idx = find(obj.x > win(1) | obj.x < -win(1) | obj.y > win(2)|obj.y < -win(2) |obj.yr <= 0)'; 
+            
+            if ~isempty(idx)
+                
+                    % (re-)place dots randomly within the aperture
+                    
+                    obj.initDots(idx,xshift,yshift,rshift);
+
+         
+            end  
             
         end
 
-        function drawDots(obj,replayx,replayy,replaycolor)
+        function drawDots(obj)
             if ~obj.stimValue
                 return
             end
             
             [sourceFactorOld, destinationFactorOld] = Screen('BlendFunction', obj.winPtr, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            Screen('DrawDots',obj.winPtr,[replayx(:), -1*replayy(:)]', obj.size, replaycolor, obj.position, obj.dotType);
+            Screen('DrawDots',obj.winPtr,[obj.x(:), -1*obj.y(:)]', obj.size, obj.color, obj.position, obj.dotType);
             Screen('BlendFunction', obj.winPtr, sourceFactorOld, destinationFactorOld);
         end
        

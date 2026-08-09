@@ -1,5 +1,5 @@
 
-function [S,P] = Dotsflow_replay()
+function [S,P] = Dotsflow_DomeRP()
 
 %%%% NECESSARY VARIABLES FOR GUI
 %%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -14,10 +14,10 @@ S = MarmoViewRigSettings;
 S.MarmoViewVersion = '6';
 
 % PARAMETER DESCRIBING TRIAL NUMBER TO STOP TASK
-S.finish = 30; % 
+S.finish = 100; % 
 
 % PROTOCOL PREFIX
-S.protocol = 'DotsflowReplay';
+S.protocol = 'DotsflowDomeRP';
 % PROTOCOL PREFIXS
 S.protocol_class = ['protocols.PR_',S.protocol];
 
@@ -56,7 +56,7 @@ S.trialdur = 'Trial/Dots Flow Duration (s):';
 % P.FlowHis = flowhis;
 % S.FlowHis = 'Dots flow history replay';
 
-P.size = 34; % 0.8
+P.size = 24; % 0.6847 deg, @ 31.23 cm, 29.21ppd, 43.6577,24.5575 visual filed 
 S.size = 'Dot size (pix)';
 P.speed = 5;
 S.speed = 'Dot motion speed for passive viewing (deg/s)';

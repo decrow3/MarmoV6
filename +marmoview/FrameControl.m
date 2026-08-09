@@ -53,7 +53,7 @@ classdef FrameControl < matlab.mixin.Copyable & handle
      centerPix = [0,0];
      pixPerDeg = 30; 
      frameRate = 60; 
-     persistence logical = 1; % Flag for whether to keep 
+     persistence logical = false; % Keep last screen image between trials
      scr_gamma double = 1; % For redrawing
   end
 
@@ -67,8 +67,8 @@ classdef FrameControl < matlab.mixin.Copyable & handle
       %*************
       o.TimeSensitive = [];  %no states time sensitive by default
       %*************
-      o.FMAX = 115510;%5000;  %capped at a Max of 5000 screen flips
-      o.FIELDS = 9;
+      o.FMAX = 5000;  % default buffer, adjusted per rig/protocol in initialize
+      o.FIELDS = 10;
       o.FData = nan(o.FMAX,o.FIELDS);   %per trial data storage
       o.FCount = 0;
       o.c  = [0,0];
@@ -94,7 +94,6 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         %*********
         o.PInit = P;    % store parameter fields struct, never allow new fields
         %*************
-        o.FData(:) = NaN; 
         o.FCount = 0;
         %***********
         o.c = C.c;
@@ -102,9 +101,29 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         o.dy = C.dy;
         %**************
         o.frameRate = S.frameRate;
-        o.scr_gamma = S.gamma;
-        o.persistence = S.persistence; %Flag for holding stimuli on screen between trials
-        o.FMAX = 115500;%ceil(60*o.frameRate); % max trial is 20 seconds, regardless of framerate
+        if isfield(S, 'gamma') && ~isempty(S.gamma)
+            o.scr_gamma = S.gamma;
+        else
+            o.scr_gamma = 1;
+        end
+        if isfield(S, 'persistence') && ~isempty(S.persistence)
+            o.persistence = logical(S.persistence);
+        else
+            o.persistence = false;
+        end
+        if isfield(S, 'maxTrialFrames') && ~isempty(S.maxTrialFrames)
+            o.FMAX = double(S.maxTrialFrames);
+        elseif isfield(P, 'maxTrialFrames') && ~isempty(P.maxTrialFrames)
+            o.FMAX = double(P.maxTrialFrames);
+        else
+            maxTrialSeconds = 60;
+            if isfield(P, 'trialdur') && isnumeric(P.trialdur) && isscalar(P.trialdur)
+                maxTrialSeconds = max(maxTrialSeconds, double(P.trialdur) + 5);
+            end
+            o.FMAX = ceil(maxTrialSeconds * o.frameRate);
+        end
+        o.FMAX = max(1, ceil(o.FMAX));
+        o.FData = nan(o.FMAX,o.FIELDS);
         o.centerPix = S.centerPix;
         o.pixPerDeg = S.pixPerDeg;
         
@@ -193,17 +212,8 @@ classdef FrameControl < matlab.mixin.Copyable & handle
           o.FData(1:o.FCount,1) = GetSecs;  % column 1 timelock on eye pos
           %*************
           
-        %%%%%%%-- MESSING WITH THIS DPR 12/17/2024 to allow
-        %%%%%%%dots to linger between trials
           % Setup first frame
-            if o.persistence ==0
-                Screen('FillRect',o.winPtr,o.Bkgd);
-            else % Keep last screen image (but need to flip for timing)
-                img=Screen('GetImage',o.winPtr);
-                scr_gamma=o.scr_gamma;%2.5554; %hard coding until we can pass this
-                img=255*((255.^-scr_gamma)*double(img(:,:,1)).^scr_gamma);
-                Screen('PutImage', o.winPtr, img);
-            end
+          o.draw_intertrial_backbuffer();
           % when flipping, store time in eyeData
 
           [vbl, stimOnset, FlipTimestamp, Missed] = Screen('Flip',o.winPtr,0);
@@ -330,22 +340,29 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         % Reset the screen and leave blank for ITI
         o.FCount = o.FCount + 1;
         eyeI = o.FCount;
-        %Playing around with trying to keep dots on screen between trials
-        %for MT, not for actual use: 12/17/2024
-        if o.persistence ==0
-            Screen('FillRect',o.winPtr,o.Bkgd);
-        else % Keep last screen image (but need to flip for timing)
-            img=Screen('GetImage',o.winPtr);
-            scr_gamma=o.scr_gamma;%2.5554; %hard coding until we can pass this
-            img=255*((255.^-scr_gamma)*double(img(:,:,1)).^scr_gamma);
-            Screen('PutImage', o.winPtr, img);
-        end
+        o.draw_intertrial_backbuffer();
         FEnd = Screen('Flip',o.winPtr,GetSecs);
         o.FData(eyeI,6) = FEnd;
         %******* Store the Clock Sixlet ***********
         CL = fix(clock);
         CL(1) = CL(1) - 2000;
         %******************************************
+    end
+
+    function draw_intertrial_backbuffer(o)
+        if ~o.persistence
+            Screen('FillRect',o.winPtr,o.Bkgd);
+            return
+        end
+
+        try
+            img = Screen('GetImage',o.winPtr);
+            scr_gamma = o.scr_gamma;
+            img = 255*((255.^-scr_gamma)*double(img(:,:,1)).^scr_gamma);
+            Screen('PutImage', o.winPtr, img);
+        catch
+            Screen('FillRect',o.winPtr,o.Bkgd);
+        end
     end
 
     function plot_eye_trace_and_flips(o,handles)

@@ -19,11 +19,12 @@ function S = MarmoViewRigSettings
 % 
 
 
-RigName = 'Laser';
+RigName = 'laptop';
 
 %Default setting
 S.persistence=false; 
 S.stereoMode=0;
+S.maxTrialFrames = [];
 
 
 switch RigName
@@ -33,6 +34,7 @@ switch RigName
         % set up for MT retinotopic stimuli but changes frame control so
         % may have surprising (untested) impacts on other stimuli and
         % timing of first and last frames
+        S.maxTrialFrames = 115500;
 
         S.inputs = {'eyetrack_OpenIris'};%{'eyetrack_OpenIris','eyetrack_dummy'};%,'treadmill_arduino'};
         %S.inputs = {'eyetrack_dummy'}; % eyetrack_dummy
@@ -89,6 +91,11 @@ switch RigName
         S.photodiode.init = 0;
         S.photodiode.flash = 255;
         S.photodiode.TF   = 2;
+        S.photodiode.output = 'output_labjackU12';
+        S.photodiode.outputMethod = 'flipBit';
+        S.photodiode.outputBit = 3; % LabJack EDigitalOut uses zero-based IO channels
+        S.photodiode.flashFrames = 4;
+        S.photodiode.flashStartFrame = 1;
         % setup screen
    
 %         
@@ -135,6 +142,11 @@ switch RigName
         S.photodiode.init = 0;
         S.photodiode.flash = 255;
         S.photodiode.TF   = 2;
+        S.photodiode.output = 'output_datapixx2';
+        S.photodiode.outputMethod = 'flipBitNoSync';
+        S.photodiode.outputBit = 4;
+        S.photodiode.flashFrames = 4;
+        S.photodiode.flashStartFrame = 1;
 
 
         % setup screen
@@ -158,63 +170,87 @@ switch RigName
 
  
 
-    case 'testTDM'
-        S.inputs = {'eyetrack_dummy'};%{'eyetrack_dummy'};%{'eyetrack_OpenIris','treadmill_arduino'};
-        S.outputs = {'output_datapixx'};
-        S.feedback = {'feedback_newera'};%'feedback_sound',
+    case {'TDM','testTDM'}
+        % Standard TDM treadmill setup.
+        S.persistence = false;
+        S.maxTrialFrames = 12800;
+        S.bgColour = 127; % use 127 if gamma corrected
+        % Procedural shader for Hartley requires (for now):
+        % S.bgColour = 0.5; % luminance values are normalized between 0 and 1
+        % InitializeMatlabOpenGL
 
+        S.inputs = {'eyetrack_OpenIris'};
+        % S.inputs = {'eyetrack_OpenIris_pupil_right'};
+        % S.inputs = {'eyetrack_dummy', 'treadmill_arduino'};
+        % S.inputs = {'eyetrack_OpenIris', 'trackball_mouseDevice'};
+        S.outputs = {'output_datapixx'};
+        S.feedback = {'feedback_newera'};
+        S.frameRate = 240;
 
         S.eyetrack_OpenIris.ip      = '100.1.1.1';
         S.eyetrack_OpenIris.port    = 9003;
         S.eyetrack_OpenIris.UseAsEyeTracker = true;
         S.eyetracker = 'OpenIris';
 
+        S.eyetrack_OpenIris_pupil_right.ip      = '100.1.1.1';
+        S.eyetrack_OpenIris_pupil_right.port    = 9003;
+        S.eyetrack_OpenIris_pupil_right.UseAsEyeTracker = true;
 
-        %S.feedback_newera = true;  
         S.feedback_newera.port = '/dev/ttyUSB0';              % use Newera juice pump
-        S.feedback_newera.pumpDiameter = 20;                % internal diameter of the juice syringe (mm)
-        S.feedback_newera.pumpRate = 20;                     % rate to deliver juice (ml/minute)
-        S.feedback_newera.pumpDefVol = 10;                % default dispensing volume (ml)
-
+        S.feedback_newera.pumpDiameter = 38.1;                % internal diameter of the juice syringe (mm)
+        S.feedback_newera.pumpRate = 20;                      % rate to deliver juice (ml/minute)
+        S.feedback_newera.pumpDefVol = 2;                     % default dispensing volume (ml)
 
         S.arrington = false;      % use Arrington eye tracker
         S.DummyEye = false;       % use mouse instead of eye tracker
-        S.solenoid = false;      % use solenoid juice delivery
-        S.DummyScreen = false;   % don't use a Dummy Display
-        S.EyeDump = true;        % store all eye position data
-        S.output_datapixx.KeepUnmatched =true;
+        S.solenoid = false;       % use solenoid juice delivery
+        S.DummyScreen = false;    % don't use a Dummy Display
+        S.EyeDump = true;         % store all eye position data
+        S.output_datapixx.KeepUnmatched = true;
         S.DataPixx = true;
 
-
-        %S.treadmill_arduino.type = 'arduino';
         S.treadmill_arduino.baud = 115200;
         S.treadmill_arduino.port = '/dev/ttyACM0';
-        S.treadmill_arduino.scaleFactor = (94.25/5000); % circimference of wheel over ticks per rev
+        S.treadmill_arduino.scaleFactor = (94.25/5000); % circumference of wheel over ticks per rev
         S.treadmill_arduino.rewardMode = 'distProb';
-        S.treadmill_arduino.rewardDist = 94.25/2; %PSC changed to 94.25 06052023
-        S.treadmill_arduino.rewardProb = 1; % 1
+        S.treadmill_arduino.rewardDist = 94.25/5;
+        S.treadmill_arduino.rewardProb = 1;
+
+        S.trackball_mouseDevice.baud = 115200;
+        S.trackball_mouseDevice.port = '/dev/ttyACM0';
+        S.trackball_mouseDevice.scaleFactor = (94.25/5000); % circumference of wheel over ticks per rev
+        S.trackball_mouseDevice.rewardMode = 'distProb';
+        S.trackball_mouseDevice.rewardDist = 94.25/5;
+        S.trackball_mouseDevice.rewardProb = 1;
         
         % setup screen
         S.monitor = 'ASUS-PG27AQN';         % Monitor used for display window
         S.screenNumber = 1;                % Designates the display for task stimuli
-        S.frameRate = 240;                 % Frame rate of screen in Hz
-        S.screenRect = [0 0 2560 1440];     %  Screen dimensions in pixels
-        S.screenWidth = 59.6;                 % Width of screen (cm)
-        S.centerPix =  [2560 1440]/2;           % Pixels of center of the screen
+        S.screenRect = [0 0 2560 1440];     % Screen dimensions in pixels
+        S.screenWidth = 59.6;               % Width of screen (cm)
+        S.centerPix = [2560 1440]/2;        % Pixels of center of the screen
         S.guiLocation = [3840+200 100 890 660];
-        S.bgColour = 127; %127; %186;  % use 127 if gamma corrected
-        S.gamma = 2.5554; %updated on Oct 9, 2023 
-        S.screenDistance = 38;              % Distance of eye to screen (cm)
+
+        % fitting with crtGamma, CalTDM0703
+        % Exponent for device 1 is 2.19315
+        % Exponent for device 2 is 2.22572
+        % Exponent for device 3 is 2.15016
+        S.gamma = mean([2.19315 2.22572 2.15016]);
+
+        S.screenDistance = 63.5;            % Distance of eye to screen (cm)
         S.pixPerDeg = PixPerDeg(S.screenDistance,S.screenWidth,S.screenRect(3));
         
-
-        %Photodiode patch parameters
-        S.photodiode.rect =[S.screenRect(3)-150  S.screenRect(4)-150 S.screenRect(3) S.screenRect(4)];%[0 0 100 100];%
+        % Photodiode patch parameters
+        S.photodiode.rect = [S.screenRect(3)-150 S.screenRect(4)-150 S.screenRect(3) S.screenRect(4)];
         S.photodiode.init = 127;
         S.photodiode.flash = 0;
         S.photodiode.TF   = 1;
+        S.photodiode.output = 'output_datapixx';
+        S.photodiode.outputMethod = 'datapixxDoutVideoSync';
+        S.photodiode.outputBit = 4;
+        S.photodiode.flashFrames = 1;
+        S.photodiode.flashStartFrame = 1;
 
-        
         S.eyetrack_dummy = true;
         S.feedback_sound = [];        
         S.DummyScreen = false; % TODO: remove this parameter (it should be covered by screen Rect. Is it? NO!!!!! But it should be)

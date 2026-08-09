@@ -1,5 +1,5 @@
 
-function [S,P] = Dotsflow_replay()
+function [S,P] = Dotsflow_MT_Treadmill()
 
 %%%% NECESSARY VARIABLES FOR GUI
 %%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -14,15 +14,15 @@ S = MarmoViewRigSettings;
 S.MarmoViewVersion = '6';
 
 % PARAMETER DESCRIBING TRIAL NUMBER TO STOP TASK
-S.finish = 30; % 
+S.finish = 30;
 
 % PROTOCOL PREFIX
-S.protocol = 'DotsflowReplay';
+S.protocol = 'Dotsflow_MTImaging';
 % PROTOCOL PREFIXS
 S.protocol_class = ['protocols.PR_',S.protocol];
 
 
-%NOTE: in MarmoView5 subject is entered in GUI
+%NOTE: in MarmoView6 subject is entered in GUI
 
 %******** Don't allow in trial calibration for this one (comment out)
 % P.InTrialCalib = 1;
@@ -34,7 +34,7 @@ S.TimeSensitive = 1:7;
 
 % Define Banner text to identify the experimental protocol
 % recommend maximum of ~28 characters
-S.protocolTitle = 'Flow field on Treadmill';
+S.protocolTitle = 'Random Direction Flow field at Treadmill Rig';
 
 %%%%% END OF NECESSARY VARIABLES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -47,26 +47,18 @@ S.protocolTitle = 'Flow field on Treadmill';
 % P.rewardNumber = 1;   % Max juice, only one drop ... it is so easy!
 % S.rewardNumber = 'Number of juice pulses to deliver:';
 
-%******* trial timing and reward
-P.trialdur = 10; % this is also the stimulus duration 
-S.trialdur = 'Trial/Dots Flow Duration (s):';
-
 %************** stimulus settings 
-% load('FlowHis.mat');
-% P.FlowHis = flowhis;
-% S.FlowHis = 'Dots flow history replay';
-
-P.size = 34; % 0.8
-S.size = 'Dot size (pix)';
-P.speed = 5;
+P.size = 34;
+S.size = 'Dot size (pix)'; % 0.5 visual deg 
+P.speed = 8;
 S.speed = 'Dot motion speed for passive viewing (deg/s)';
 P.direction = 180;
 S.direction = 'Initialized dots direction (deg)';
 P.numDots = 300;
 S.numDots = 'Number of dots';
 P.lifetime = Inf;
-S.lifetime = 'Lifetime of the dots (s)';
-P.maxRadius = 10;
+S.lifetime = 'Lifetime of the dots (frames)';
+P.maxRadius = 40;
 S.maxRadius = 'Maximum radius of the dots';
 P.position = S.screenRect(3:4).*0.5;
 S.position = 'Origin position in draw dots function';
@@ -80,7 +72,21 @@ S.dotType = 'Type of the dots';
 P.runType = 0;
 S.runType = '0-User,1-Trials List:';
 
-%************** treadmill specific settings 
+%******* trial timing and reward
+P.onDur = 0.5; % 0.6 >0.5 & <1s
+S.onDur = 'Time for flow ON';
+P.trialdur = P.onDur*2*10;%P.onDur*2*20; % ON-OFF*ncycles = run/trial  
+S.trialdur = 'Trial Duration (s):';
+P.cycleTime=[0,P.onDur:P.onDur:P.trialdur];
+S.cycleTime='ON-OFF cycle time points';
+P.stimEnds = 2:2:2*10;%2:2:2*20
+S.stimEnds = 'stimulus end times';
+P.grayEnds = 3:2:2*10+1;%3:2:2*10+1
+S.grayEnds = 'OFF period end times';
+P.iti = 0.5;%10 for Imaging;
+S.iti = 'Duration of intertrial interval (s):';
+P.refreshRate = 240;
+S.refreshRate = 'Stimulus refresh rate (hz)';
 
 
 

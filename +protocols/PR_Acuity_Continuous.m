@@ -214,6 +214,18 @@ classdef PR_Acuity_Continuous < handle
                     o.hProbe(1).bkgd= 127;
                     o.hProbe(1).maxRadius= inf;
                     o.hProbe(1).lifetime= 30;
+                    if isfield(P,'centerDecayProfile')
+                        o.hProbe(1).setCenterDecayProfile(P.centerDecayProfile);
+                    end
+                    if isfield(P,'centerDecay')
+                        o.hProbe(1).centerDecay = logical(P.centerDecay);
+                    end
+                    if isfield(P,'centerDecayRadii')
+                        o.hProbe(1).centerDecayRadii = P.centerDecayRadii;
+                    end
+                    if isfield(P,'centerDecaySteps')
+                        o.hProbe(1).centerDecaySteps = P.centerDecaySteps;
+                    end
                     o.hProbe(1).Xtop=  S.screenRect(3);
                     o.hProbe(1).Xbot=  S.screenRect(1);
                     o.hProbe(1).Ytop=  S.screenRect(2);

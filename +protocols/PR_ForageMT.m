@@ -475,7 +475,7 @@ classdef PR_ForageMT < handle
     end
    
     %******************** THIS IS THE BIG FUNCTION *************
-    function drop = state_and_screen_update(o,currentTime,x,y,varargin) 
+    function drop = state_and_screen_update(o,currentTime,x,y,~) 
         drop = 0;
         %******* THIS PART CHANGES WITH EACH PROTOCOL ****************
         if (o.state == 0)

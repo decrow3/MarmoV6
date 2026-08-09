@@ -322,6 +322,10 @@ classdef PR_OKN_converging < protocols.protocol
     %******************** THIS IS THE BIG FUNCTION *************
     function drop = state_and_screen_update(o,currentTime,x,y,varargin)  
         drop = 0;
+        outputs = {};
+        if ~isempty(varargin) && length(varargin)>1
+            outputs=varargin{2};
+        end
         %******* THIS PART CHANGES WITH EACH PROTOCOL ****************
         if o.state == 0 && currentTime > o.startTime + o.P.trialdur
             o.state = 1; % Inter trial interval
@@ -339,47 +343,8 @@ classdef PR_OKN_converging < protocols.protocol
 
 
 
-%         %% PHOTODIODE FLASH, move to frame control/ output(?)
-%         This is gross, this is why we have independant outputs
-%         %DPR - 5/5/2023
-        if isfield(o.S,'photodiode')
-            if ~isempty(o.S.outputs)
-                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
-                ardout=find(cellfun(@(x) strcmp(x,'output_arduino'), o.S.outputs));
-            else
-                dpout=0;
-                ardout=0;
-            end
-
-            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
-                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
-                
-                %Should be <20 so shouldn't need to preallocate but..
-                o.Flashtime=[o.Flashtime; currentTime];
-
-                if dpout
-                    %ttl-4 high
-                    timings=outputs{dpout}.flipBitNoSync(4,1);
-                elseif ardout
-                    %ttl-4 high
-                    timings=outputs{ardout}.flipBit(4,1);
-                else
-                    timings=[];
-                end
-                %Should be <20 so shouldn't need to preallocate but..
-                o.FlashOutTimings=[o.FlashOutTimings; timings];
-            else % Send every frame? This seems really unnecessary, and may slow things down
-                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
-                if dpout
-                    %ttl4 low
-                    [~]=outputs{dpout}.flipBitNoSync(4,0);
-                elseif ardout
-                    %ttl-4 low
-                    [~]=outputs{ardout}.flipBit(4,0);
-                end
-            end
-       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
-        end
+        [o.Flashtime,o.FlashOutTimings] = marmoview.updatePhotodiode( ...
+            o.winPtr,o.S,outputs,o.FrameCount,currentTime,o.Flashtime,o.FlashOutTimings);
 
     end
     

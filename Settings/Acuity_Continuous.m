@@ -75,6 +75,8 @@ P.squareWave = 0;
 S.squareWave = '0 - sine wave, 1 - square wave';
 P.mode = 1;
 S.mode = '0 - sine wave, 1 - optic flow';
+P.centerDecayProfile = 1;
+S.centerDecayProfile = 'Optic flow center cull: 0-off, 1-Laser, 2-TDM';
 
 % Gaze indicator
 P.eyeRadius = 2.5; 

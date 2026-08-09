@@ -323,15 +323,98 @@ classdef PR_ForageProceduralNoise < protocols.protocol
               % o.hNoise.updateEveryNFrames = ceil(S.frameRate / P.noiseFrameRate);
                o.hNoise.updateTextures(); % create the procedural texture
 
-          case 14 % Full-field static Hartley plaid
+           case 10 % Drifting grating background but with independant SF/TF
+        
+               o.NoiseHistory = nan(o.MaxFrame,7); % time, orientation, cpd, phase, direction, TF, contrast
+               
+               % position
+               x = P.GratCtrX*S.pixPerDeg + S.centerPix(1);
+               y = -P.GratCtrY*S.pixPerDeg + S.centerPix(2);
+               
+               % noise object is created here
+               o.hNoise = stimuli.grating_drifting_TFs(o.winPtr, ...
+                    'numDirections', P.numDir, ...
+                    'minSF', P.GratSFmin, ...
+                    'numOctaves', P.GratNumOct, ...
+                    'pixPerDeg', S.pixPerDeg, ...
+                    'frameRate', S.frameRate, ...
+                    'minTF', P.GratTFmin, ...
+                    'nTFs',  P.nTFs, ...
+                    'position', [x y], ...
+                    'screenRect', S.screenRect, ...
+                    'diameter', P.GratDiameter, ...
+                    'durationOn', P.GratDurOn, ...
+                    'durationOff', P.GratDurOff, ...
+                    'isiJitter', P.GratISIjit, ...
+                    'contrasts', P.GratCon, ...
+                    'randomizePhase', P.RandPhase);
+                
+               o.hNoise.updateTextures(); % create the procedural texture
+
+           case 11 % Drifting grating background but with independant SF/TF, and doubling octaves
+        
+               o.NoiseHistory = nan(o.MaxFrame,7); % time, orientation, cpd, phase, direction, TF, contrast
+               
+               % position
+               x = P.GratCtrX*S.pixPerDeg + S.centerPix(1);
+               y = -P.GratCtrY*S.pixPerDeg + S.centerPix(2);
+               
+               % noise object is created here
+               o.hNoise = stimuli.grating_drifting_TFSFx4(o.winPtr, ...
+                    'numDirections', P.numDir, ...
+                    'minSF', P.GratSFmin, ...
+                    'numOctaves', P.GratNumOct, ...
+                    'pixPerDeg', S.pixPerDeg, ...
+                    'frameRate', S.frameRate, ...
+                    'minTF', P.GratTFmin, ...
+                    'nTFs',  P.nTFs, ...
+                    'position', [x y], ...
+                    'screenRect', S.screenRect, ...
+                    'diameter', P.GratDiameter, ...
+                    'durationOn', P.GratDurOn, ...
+                    'durationOff', P.GratDurOff, ...
+                    'isiJitter', P.GratISIjit, ...
+                    'contrasts', P.GratCon, ...
+                    'randomizePhase', P.RandPhase);
+
+               o.hNoise.updateTextures(); % create the procedural texture
+
+
+           case 14 % Full-field static hartleyplaid (K superimposed gratings; tight grid)
+
                hp_K = P.hp_K;
-               o.NoiseHistory = nan(o.MaxFrame, 1 + 1 + 4*hp_K);  % [time | K | (fx fy amp idx) x K]
+               o.NoiseHistory = nan(o.MaxFrame, 1 + 1 + 4*hp_K);  % [time | K | (fx fy amp idx) × K] -phi is fixed
 
                equalStride = false;
                if isfield(P, 'equalStride')
                    equalStride = P.equalStride;
                end
 
+               %                     fx  = row(2 + (0:(nK-1)));
+               %                     fy  = row(2 + nK + (0:(nK-1)));
+               %                     amp = row(2 + 2*nK + (0:(nK-1)));
+               %                     idx = row(2 + 3*nK + (0:(nK-1)));
+               %                     I(x,y) = bgGrey + sum_j amp(j)*sin(2*pi*(fx(j)*X + fy(j)*Y) - pi/4);
+
+               % Build the tight grid from screen geometry:
+               % Wdeg = RectWidth(S.screenRect)/S.pixPerDeg;
+               % Hdeg = RectHeight(S.screenRect)/S.pixPerDeg;
+
+               % % Auto-pick strides from ns unless user overrides:
+               ns = P.hp_ns;
+               % if isempty(P.hp_strideKx) || isempty(P.hp_strideKy)
+               %     [sx, sy, info] = pickHartleyStridesFromNs(Wdeg, Hdeg, P.hp_maxSF, P.hp_maxSF, ns);
+               % else
+               %     sx   = P.hp_strideKx;
+               %     sy   = P.hp_strideKy;
+               %     info = struct('nx', 2*floor(floor(Wdeg*P.hp_maxSF)/sx)+1, ...
+               %         'ny', 2*floor(floor(Hdeg*P.hp_maxSF)/sy)+1, ...
+               %         'N_total', []);
+               % end
+               % fprintf('[hartleyplaid] sx=%d sy=%d | nx=%d ny=%d | maxSF=%.2f c/deg\n', ...
+               %     sx, sy, info.nx, info.ny, P.hp_maxSF);
+
+               % Instantiate the pre-rendered 8-bit texture bank (tight rectangular grid, no disk)
                o.hNoise = stimuli.hartleyplaid_procedural(o.winPtr, ...
                    'screenRect', S.screenRect, ...
                    'pixPerDeg',  S.pixPerDeg, ...
@@ -343,7 +426,30 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                    'contrast',   P.noiseContrast, ...
                    'updateEveryNFrames', ceil(S.frameRate / P.noiseFrameRate), ...
                    'bgGrey',     S.bgColour);
-               
+
+               %Automatic:
+               %o.hNoise.updateTextures();  % pre-render the atom bank
+               % 
+               % 
+               % stim = hartleyplaid_procedural(winPtr, ...
+               %     'screenRect', screenRect, ...
+               %     'pixPerDeg', pixPerDeg, ...
+               %     'maxSF', 8, ...
+               %     'ns', 25, ...             % target samples per axis
+               %     'equalStride', true);     % isotropic stride mode
+               % 
+               % 
+               % vs
+               % 
+               % stim = hartleyplaid_procedural(winPtr, ...
+               %     'screenRect', screenRect, ...
+               %     'pixPerDeg', pixPerDeg, ...
+               %     'maxSF', 8, ...
+               %     'ns', Inf, ...           % full integer lattice
+               %     'equalStride', false);
+
+
+
        end
        %**********************************************************
        
@@ -668,28 +774,76 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                          % time, orientation, cpd, phase, direction, speed, contrast
                      end
 
-                  case 14 % Full-field static Hartley plaid
-                     o.hNoise.afterFrame(); % update internal counters
+                    case 10 % drifting gratings with indep TF
+                     
+                     o.hNoise.afterFrame(); % update parameters
                      if isfield(o.S,'stereoMode') && o.S.stereoMode>0
                          Screen('SelectStereoDrawBuffer', o.winPtr, 0);
-                         o.hNoise.beforeFrame();
+                         o.hNoise.beforeFrame(); % draw
                          Screen('SelectStereoDrawBuffer', o.winPtr, 1);
-                         o.hNoise.beforeFrame();
+                         o.hNoise.beforeFrame(); % draw
                      else
-                        o.hNoise.beforeFrame();
+                        o.hNoise.beforeFrame(); % draw
                      end
                      %**********
                      o.FrameCount = o.FrameCount + 1;
+                     % NOTE: store screen time in "continue_run_trial" after flip
+                     o.NoiseHistory(o.FrameCount,2) = o.hNoise.orientation;  % store orientation
+                     o.NoiseHistory(o.FrameCount,3) = o.hNoise.cpd;  % store spatialfrequency
+                     o.NoiseHistory(o.FrameCount,4) = o.hNoise.phase;
+                     o.NoiseHistory(o.FrameCount,5) = o.hNoise.orientation-90;
+                     o.NoiseHistory(o.FrameCount,6) = o.hNoise.tf;
+                     o.NoiseHistory(o.FrameCount,7) = o.hNoise.contrast;
+                     
+                     % time, orientation, cpd, phase, direction, tf, contrast
+                    case 11 % drifting gratings with indep TF
+                     
+                     o.hNoise.afterFrame(); % update parameters
+                     if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                         o.hNoise.beforeFrame(); % draw
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                         o.hNoise.beforeFrame(); % draw
+                     else
+                        o.hNoise.beforeFrame(); % draw
+                     end
+                     %**********
+                     o.FrameCount = o.FrameCount + 1;
+                     % NOTE: store screen time in "continue_run_trial" after flip
+                     o.NoiseHistory(o.FrameCount,2) = o.hNoise.orientation;  % store orientation
+                     o.NoiseHistory(o.FrameCount,3) = o.hNoise.cpd;  % store spatialfrequency
+                     o.NoiseHistory(o.FrameCount,4) = o.hNoise.phase;
+                     o.NoiseHistory(o.FrameCount,5) = o.hNoise.orientation-90;
+                     o.NoiseHistory(o.FrameCount,6) = o.hNoise.tf;
+                     o.NoiseHistory(o.FrameCount,7) = o.hNoise.contrast;
 
+                     % time, orientation, cpd, phase, direction, tf, contrast
+                 case 14 % Full-field static hartleyplaid (tight rectangular grid)
+                     o.hNoise.afterFrame();       % update internal counters
+                     if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                         o.hNoise.beforeFrame();  % draw (eye 0)
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                         o.hNoise.beforeFrame();  % draw (eye 1)
+                     else
+                         o.hNoise.beforeFrame();  % draw mono
+                     end
+
+                     o.FrameCount = o.FrameCount + 1;
+
+                     % Current parameters
                      nK  = o.hNoise.K;
-                     amp = o.hNoise.current.amp(:);
+                     amp = o.hNoise.current.amp(:);   % signed amplitudes
                      fx  = o.hNoise.current.fx(:);
                      fy  = o.hNoise.current.fy(:);
                      idx = o.hNoise.current.idx(:);
+
+                     % Build log row: [K | fx(1:K) | fy(1:K) | amp(1:K) | idx(1:K)]
                      row = [nK, fx.', fy.', amp.', double(idx.')];
 
-                     % NOTE: store screen time in "continue_run_trial" after flip.
+                     % Write to NoiseHistory (col 1 = time, set after Flip)
                      o.NoiseHistory(o.FrameCount, 2:(1+numel(row))) = row;
+
 
                      
              end
@@ -817,6 +971,7 @@ classdef PR_ForageProceduralNoise < protocols.protocol
    
     %******************** THIS IS THE BIG FUNCTION *************
     function drop = state_and_screen_update(o,currentTime,x,y, varargin) 
+         outputs = {};
          if ~isempty(varargin)
              inputs=varargin{1};
              if length(varargin)>1
@@ -833,7 +988,11 @@ classdef PR_ForageProceduralNoise < protocols.protocol
         if currentTime > o.startTime + o.TrialDur
             o.state = 4;  % time to end trial
             o.itiStart = GetSecs;
-            if isa(o.hNoise, 'stimuli.hartleyplaid_procedural')
+            if isa(o.hNoise, 'stimuli.hartleyplaid_procedural') && ...
+                    isprop(o.hNoise, 'oldmaximumvalue') && ...
+                    isprop(o.hNoise, 'oldclampcolors') && ...
+                    isprop(o.hNoise, 'oldapplyToDoubleInputMakeTexture') && ...
+                    ~isempty(o.hNoise.oldmaximumvalue)
                 try
                     Screen('ColorRange', o.hNoise.winPtr, o.hNoise.oldmaximumvalue, ...
                         o.hNoise.oldclampcolors, o.hNoise.oldapplyToDoubleInputMakeTexture);
@@ -881,60 +1040,32 @@ classdef PR_ForageProceduralNoise < protocols.protocol
         %*******ACTUAL DRAWING OF THE STIMULI *************
         % Draw probe stimuli
         if (o.state < 2)
-            Screen('SelectStereoDrawBuffer', o.winPtr, 0);
-            o.hProbe{o.targOri}.beforeFrame();  % only one target now
-            Screen('SelectStereoDrawBuffer', o.winPtr, 1);
-            o.hProbe{o.targOri}.beforeFrame();  % only one target now          
+            if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                o.hProbe{o.targOri}.beforeFrame();  % only one target now
+                Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                o.hProbe{o.targOri}.beforeFrame();  % only one target now
+            else
+                o.hProbe{o.targOri}.beforeFrame();  % only one target now
+            end
         end
         % Draw face stimulus at probe location and reward at end of display
         if (o.state == 3) 
-            Screen('SelectStereoDrawBuffer', o.winPtr, 0);
-            o.Faces.beforeFrame(); 
-            Screen('SelectStereoDrawBuffer', o.winPtr, 1);
-            o.Faces.beforeFrame();    
+            if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                o.Faces.beforeFrame();
+                Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                o.Faces.beforeFrame();
+            else
+                o.Faces.beforeFrame();
+            end
         end
         %****************************************   
         
 %         Screen('DrawingFinished', o.winPtr);
 
 
-%         %% PHOTODIODE FLASH, move to frame control/ output(?)
-%         This is gross, this is why we have independant outputs
-%         %DPR - 5/5/2023
-        if isfield(o.S,'photodiode')
-            if ~isempty(o.S.outputs)
-                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
-                ardout=find(cellfun(@(x) strcmp(x,'output_arduino'), o.S.outputs));
-            else
-                dpout=0;
-                ardout=0;
-            end
-
-            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)<=4 % first frame flash photodiode
-                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
-                
-                %Should be <20 so shouldn't need to preallocate but..
-                o.Flashtime=[o.Flashtime; currentTime];
-
-                if dpout
-                    %ttl4 high
-                    outputs{dpout}.flipBitVideoSync(4,1);
-                elseif ardout
-                    %ttl4 high
-                    outputs{ardout}.flipBit(4,1); %pin 11? should be most sig bit
-                end
-            else
-                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
-                if dpout
-                    %ttl4 low
-                    outputs{dpout}.flipBitVideoSync(4,0);
-                elseif ardout
-                    %ttl4 high
-                    outputs{ardout}.flipBit(4,0);
-                end
-            end
-            % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
-        end
+        o.Flashtime = marmoview.updatePhotodiode(o.winPtr,o.S,outputs,o.FrameCount,currentTime,o.Flashtime);
     end
     
     function Iti = end_run_trial(o)
@@ -971,9 +1102,11 @@ classdef PR_ForageProceduralNoise < protocols.protocol
         if isa(o.hNoise, 'stimuli.stimulus')
             PR.hNoise = copy(o.hNoise); % store noise object
             if isa(o.hNoise, 'stimuli.hartleyplaid_procedural')
-                PR.hNoise.bank = []; % too big to store on every trial
+                PR.hNoise.bank = []; %too big to store everything on every trial. (not unique to trials)
             end
         end
+
+
         
         PR.error = o.error;
         if o.FrameCount == 0

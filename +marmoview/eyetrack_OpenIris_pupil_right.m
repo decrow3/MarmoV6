@@ -1,4 +1,4 @@
-classdef eyetrack_OpenIris2  < handle
+classdef eyetrack_OpenIris_pupil_right  < handle
     %VOG Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -9,6 +9,7 @@ classdef eyetrack_OpenIris2  < handle
         ip
         port
         connected
+        eyesize = 0
     end
 
     properties (SetAccess = private, GetAccess = public)
@@ -19,7 +20,7 @@ classdef eyetrack_OpenIris2  < handle
 
     
     methods
-        function o = eyetrack_OpenIris2(~,varargin) 
+        function o = eyetrack_OpenIris_pupil_right(~,varargin) 
             % initialise input parser
             p = inputParser;
             p.addParameter('EyeDump',true,@islogical); % default 1, do EyeDump
@@ -42,14 +43,10 @@ classdef eyetrack_OpenIris2  < handle
         function startfile(o)
             %o.SetSessionName(sessionName)
             o.StartRecording
-            o.StartRecording
-            o.StartRecording
             o.Starttime=GetSecs;
         end
         
         function closefile(o)
-            o.StopRecording
-            o.StopRecording
             o.StopRecording
             o.Stoptime=GetSecs;
         end
@@ -67,6 +64,8 @@ classdef eyetrack_OpenIris2  < handle
         end
 
         function readinput(o,~)
+            % Would love to append Eyedata into a stored matrix, but maybe
+            % this isn't the place to do it. Reallocation will be key
 %             if isempty(o.Eyedata)
                 o.Eyedata=o.GetCurrentData;
 %             else
@@ -79,8 +78,9 @@ classdef eyetrack_OpenIris2  < handle
             y=o.Eyedata(end).RightY;
         end
         
-        function r = getpupil(~)
-            r = 1.0;
+        function r = getpupil(o,~)
+            r = o.Eyedata(end).RightPupilArea;
+            %r = 1;
         end
 
         function C=calibinit(~,~)
@@ -158,31 +158,74 @@ classdef eyetrack_OpenIris2  < handle
 
 
             if ( ~isempty( this.t) )
-%                 write(this.t,uint8('waitfordata'),"uint8",this.ip,this.port);
-                t0=GetSecs;
-                flush(this.t);
+                % write(this.t,uint8('waitfordata'),"uint8",this.ip,this.port);
                 write(this.t,uint8('getdata'),"uint8",this.ip,this.port);
-                t1=GetSecs;
-                %display(t1-t0);
-
-                % t0=GetSecs;t1=GetSecs;
-                while(this.t.NumBytesAvailable == 0 )
-                    % t1=GetSecs;
-                    %TODO: WHAT IS HAPPENING HERE, this.t is not empty so
-                    %there is data available but NumBytesAv is 0??
+                t0=GetSecs;t1=t0;
+                while(this.t.NumBytesAvailable == 0 )&&(t1-t0<0.20)
+                    t1=GetSecs;
                 end
-                % display(t1-t0); %~2e-4
+                if(this.t.NumBytesAvailable == 0)
+                    data.RightX =nan;
+                    data.LeftX =nan;
+                    data.RightY=nan; 
+                    data.LefY=nan;
+
+                    data.RightPupilArea=0;
+                    data.LeftPupilArea=0;
+                    print('EYETRACK CONNECTION LOST!')
+                    return
+                end
                 bytes = read(this.t, this.t.NumBytesAvailable, "uint8");
                 datastr = char(bytes);
-                dataarray = str2double(string(strsplit(datastr,';')'));
-                data.LeftFrameNumber = dataarray(1);
-                data.LeftTime = dataarray(2);
-                data.LeftX = dataarray(3);
-                data.LeftY = dataarray(4);
-                data.RightFramenumber = dataarray(5);
-                data.RightTime = dataarray(6);
-                data.RightX = dataarray(7);
-                data.RightY = dataarray(8);
+                
+                %dataarray = str2double(string(strsplit(datastr,';')'));
+                % if length(dataarray)>1
+                %     %old version
+                %     data.LeftFrameNumber = dataarray(1);
+                %     data.LeftTime = dataarray(2);
+                %     data.LeftX = dataarray(3);
+                %     data.LeftY = dataarray(4);
+                %     data.RightFramenumber = dataarray(5);
+                %     data.RightTime = dataarray(6);
+                %     data.RightX = dataarray(7);
+                %     data.RightY = dataarray(8);
+                % else
+                    %DPI
+                    dataarray=jsondecode(datastr);
+                    if isfield(dataarray,'Left')
+                        data.LeftFrameNumber = dataarray.Left.FrameNumber;
+                        data.LeftTime = dataarray.Left.Seconds;
+
+                        data.LeftPupilWidth=dataarray.Left.Pupil.Size.Width;
+                        data.LeftPupilHeight=dataarray.Left.Pupil.Size.Height;
+                        data.LeftPupilArea=pi*(data.LeftPupilWidth/2)*(data.LeftPupilHeight/2);
+
+
+                        % if length(dataarray.Left.CRs)>3 %go for DPI
+                        %     data.LeftX = dataarray.Left.CRs(4).X-dataarray.Left.CRs(1).X;%p4-p1
+                        %     data.LeftY = dataarray.Left.CRs(4).Y-dataarray.Left.CRs(1).Y;
+                        % else %revert to pupil
+                            data.LeftX = dataarray.Left.Pupil.Center.X;
+                            data.LeftY = dataarray.Left.Pupil.Center.Y;
+                        % end
+                    end
+                    if isfield(dataarray,'Right')
+                        data.RightFrameNumber = dataarray.Right.FrameNumber;
+                        data.RightTime = dataarray.Right.Seconds;
+
+                        data.RightPupilWidth=dataarray.Right.Pupil.Size.Width;
+                        data.RightPupilHeight=dataarray.Right.Pupil.Size.Height;
+                        data.RightPupilArea=pi*(data.RightPupilWidth/2)*(data.RightPupilHeight/2);
+
+                        % if length(dataarray.Right.CRs)>3 %go for DPI
+                        %     data.RightX = dataarray.Right.CRs(4).X-dataarray.Right.CRs(1).X;%p4-p1
+                        %     data.RightY = dataarray.Right.CRs(4).Y-dataarray.Right.CRs(1).Y;
+                        % else %revert to pupil
+                            data.RightX = dataarray.Right.Pupil.Center.X;
+                            data.RightY = dataarray.Right.Pupil.Center.Y;
+                        % end
+                    end
+                % end
             end
         end
 

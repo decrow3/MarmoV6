@@ -269,6 +269,7 @@ classdef PR_FixBarRF < handle
     %******************** THIS IS THE BIG FUNCTION *************
     function drop = state_and_screen_update(o,currentTime,x,y,varargin)  
         drop = 0;
+        outputs = {};
         if ~isempty(varargin)
             inputs=varargin{1};
             if length(varargin)>1
@@ -488,41 +489,7 @@ classdef PR_FixBarRF < handle
         end
         %**************************************************************
 
-      %         %DPR - 5/5/2023
-        if isfield(o.S,'photodiode')
-            if ~isempty(o.S.outputs)
-                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
-                ardout=find(cellfun(@(x) strcmp(x,'output_arduino'), o.S.outputs));
-            else
-                dpout=0;
-                ardout=0;
-            end
-
-            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)<=4 % first frame flash photodiode
-                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
-                
-                %Should be <20 so shouldn't need to preallocate but..
-                o.Flashtime=[o.Flashtime; currentTime];
-
-                if dpout
-                    %ttl4 high
-                    outputs{dpout}.flipBitVideoSync(4,1);
-                elseif ardout
-                    %ttl4 high
-                    outputs{ardout}.flipBit(4,1); %pin 11? should be most sig bit
-                end
-            else
-                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
-                if dpout
-                    %ttl4 low
-                    outputs{dpout}.flipBitVideoSync(4,0);
-                elseif ardout
-                    %ttl4 high
-                    outputs{ardout}.flipBit(4,0);
-                end
-            end
-            % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
-        end
+        o.Flashtime = marmoview.updatePhotodiode(o.winPtr,o.S,outputs,o.FrameCount,currentTime,o.Flashtime);
     end
     
     function Iti = end_run_trial(o)

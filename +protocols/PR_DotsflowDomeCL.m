@@ -1,6 +1,6 @@
-%% protocol for Dotsflow_Replay
+%% protocol for Dotsflow
 
-classdef PR_DotsflowReplay < handle
+classdef PR_DotsflowDomeCL < handle
   % Matlab class for running an experimental protocl
   % The class constructor can be called with a range of arguments:
   
@@ -10,13 +10,11 @@ classdef PR_DotsflowReplay < handle
        endTime double   = 0; % trial end time = stimEnd        
        rewardCount double = 0;    % counter for reward drops
        FrameCount double = 0;
-       FCC double =0;
-       fcc double =0;
        MaxFrame double = 10*240;%10*60;
        FlowHistory double = [];
-       TrialCount double = 0;
        %**** Photodiode flash timing
        Flashtime = [];
+       
   end
       
   properties (Access = private)
@@ -27,7 +25,6 @@ classdef PR_DotsflowReplay < handle
     P;      % copy of Params struct (loaded per trial)
     trialsList; % a list of trials to run in the experiment 
     trialIndexer = [];
-    FlowHis = [];
 
     %********* stimulus structs for use
     hFlow = []        % object for Dots flow 
@@ -37,13 +34,9 @@ classdef PR_DotsflowReplay < handle
   end
   
   methods (Access = public)
-      function o = PR_DotsflowReplay(winPtr)
+      function o = PR_DotsflowDomeCL(winPtr)
       o.winPtr = winPtr; 
       o.trialsList = [];
-
-      load('FlowHis.mat');
-      o.FlowHis = flowhis;
-
     end
     
     function state = get_state(o)
@@ -57,8 +50,8 @@ classdef PR_DotsflowReplay < handle
 %        o.trialIndexer = marmoview.TrialIndexer(o.trialsList,P);
  
          %********** Initialize Graphics Objects
-         o.hFlow = stimuli.dotspatialReplay(o.winPtr);   % dots flow stimulus
-         o.FlowHistory = zeros(o.MaxFrame,3,300);
+         o.hFlow = stimuli.dotspatial_DomeCL(o.winPtr);   % dots flow stimulus
+         o.FlowHistory = zeros(o.MaxFrame,6,300);
          
     end
    
@@ -78,10 +71,7 @@ classdef PR_DotsflowReplay < handle
     function P = next_trial(o,S,P)
           %********************
           o.S = S;
-          o.P = P;    
-          o.FrameCount = 0;
-          o.Flashtime = [];
-          o.TrialCount = o.TrialCount + 1;
+          o.P = P;       
           %*******************
         
           if P.runType == 1   % go through trials list    
@@ -93,7 +83,6 @@ classdef PR_DotsflowReplay < handle
           end
           
          
-
           % Make dots flow stimulus texture (?)
             o.hFlow.size = P.size;
             o.hFlow.speed = P.speed;
@@ -105,7 +94,6 @@ classdef PR_DotsflowReplay < handle
             o.hFlow.color = P.color;
             o.hFlow.pixPerDeg = S.pixPerDeg;
             o.hFlow.dotType = P.dotType;
-            %o.hFlow.FlowHis = P.FlowHis;
 
           %******************************************
     end
@@ -136,60 +124,131 @@ classdef PR_DotsflowReplay < handle
             keepgoing = 1;
         end
         if (o.FrameCount)
-           o.FlowHistory(o.FrameCount,1,:) = screenTime;  %store screen flip 
+           o.FlowHistory(o.FrameCount,6,:) = screenTime;  %store screen flip 
         end
+   
     end
    
     %******************** THIS IS THE BIG FUNCTION *************
     function drop = state_and_screen_update(o,currentTime,x,y,varargin) 
         drop = 0;
-        outputs = {};
-        if length(varargin)>1
-            outputs = varargin{2};
-        end
         %******* THIS PART CHANGES WITH EACH PROTOCOL ****************
         
         %%%%% STATE 0 -- GET INTO THE DOTS FLOW PRESENTATION %%%%%%%
-   
-        
+          
         inputs=varargin{:};
         for ll=1:length(inputs)
             inputclass{ll}=class(inputs{ll});
             if strcmp(inputclass{ll},'marmoview.treadmill_arduino')
                 usetreadmill=1;
+                usetrackball = 0;
                 treadmillINind=ll;
-            else
+            elseif strcmp(inputclass{ll},'marmoview.trackball_mouseDevice')
                 usetreadmill=0;
+                usetrackball=1;
+                trackballINind = ll;
+            else
+                usetreadmill = 0;
+                usetrackball = 0;
             end
         end
- 
+
+        % keyboard checking - axis isolated 
+        KbName('UnifyKeyNames');
+        rightKey = KbName('RightArrow');
+        leftKey = KbName('LeftArrow');
+        upKey = KbName('UpArrow');
+        downKey = KbName('DownArrow');
+        sKey = KbName('s');
+        dKey = KbName('d');
+
+        [ keyIsDown, seconds, keyCode ] = KbCheck;
+            keyIsDown;
+            xshift = 0;
+            yshift = 0;
+            rshift = 0;
+           
+
+        if usetreadmill==1
+            % fix this for readinput (so that we are not behind a frame
+            fnum=inputs{treadmillINind}.frameCounter-1;
+            yshift = 0; xshift = 0; rshift=0;
+            if fnum>1
+                y1=-inputs{treadmillINind}.locationSpace(fnum-1,4);
+                y2=-inputs{treadmillINind}.locationSpace(fnum,4);
+                yshift=y2-y1;
+            end
+            if isnan(yshift);yshift=0; end
+        end
+        
+        if usetrackball==1
+            % fix this for readinput (so that we are not behind a frame
+            fnum=inputs{trackballINind}.frameCounter-1;
+            yshift = 0; xshift = 0; rshift =0;
+            if fnum>1
+                x1=-inputs{trackballINind}.locationSpace(fnum-1,3);
+                x2=-inputs{trackballINind}.locationSpace(fnum,3);
+                xshift=x2-x1;
+
+                y1=-inputs{trackballINind}.locationSpace(fnum-1,4);
+                y2=-inputs{trackballINind}.locationSpace(fnum,4);
+                yshift=y2-y1;
+            end
+            if isnan(yshift);yshift=0; end
+            if isnan(xshift);xshift=0; end
+        end
+
+        if keyIsDown
+            if keyCode(rightKey)
+               xshift= -1;
+            elseif keyCode(leftKey)
+               xshift = +1;
+            elseif keyCode(upKey)
+                yshift = -1;
+            elseif keyCode(downKey)
+                yshift = +1;
+            elseif keyCode(sKey)
+                rshift = -1;
+            elseif keyCode(dKey)
+                rshift = +1;
+            end 
+        
+        end
        
         % STATE SPECIFIC DRAWS
         
-        maxReplayFrames = min([size(o.FlowHis,2), size(o.FlowHistory,1)]);
-        if o.state == 0 && currentTime < o.startTime + o.P.trialdur && o.FrameCount < maxReplayFrames
+        if o.state == 0 && currentTime < o.startTime + o.P.trialdur
+            %o.updateFlow(NaN,NaN,currentTime)
+            o.hFlow.beforeFrame();
+            o.hFlow.afterFrame(xshift, yshift, rshift);
+
             o.FrameCount = o.FrameCount + 1;
-            replayx = o.FlowHis(o.TrialCount,o.FrameCount,1,:);
-
-            replayy = o.FlowHis(o.TrialCount,o.FrameCount,2,:);
-            replaycolor = squeeze(o.FlowHis(o.TrialCount,o.FrameCount,3:5,:));
-
-            o.hFlow.beforeFrame(replayx,replayy,replaycolor);
-            o.hFlow.afterFrame();
-            o.FCC = o.FCC +1;
-
-
+            %framecount = o.FrameCount;
+                     % NOTE: store screen time in "continue_run_trial" after flip
+                     o.FlowHistory(o.FrameCount,1,:) = o.hFlow.x;  % store orientation
+                     o.FlowHistory(o.FrameCount,2,:) = o.hFlow.y;  % store spatialfrequency
+                     o.FlowHistory(o.FrameCount,3:5,:) = o.hFlow.color;
+                     
         end 
 
         if o.state == 0 && currentTime > o.startTime + o.P.trialdur
             o.state = 1; % Move to iti -- inter-trial interval
             o.error = 0; % Error 1 is failure to initiate
-            o.fcc=o.FrameCount;
             o.FrameCount = 0; % reset the frame count 
-            %o.FCC = o.FCC +1;
             o.endTime = GetSecs;
         end
-       o.Flashtime = marmoview.updatePhotodiode(o.winPtr,o.S,outputs,o.FrameCount,currentTime,o.Flashtime);
+          
+        % %% PHOTODIODE FLASH, move to frame control(?)
+%         %DPR - 5/5/2023
+        if isfield(o.S,'photodiode')
+            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
+                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
+            else
+                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
+            end
+       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
+        end
+       
         %**************************************************************
     end
     
@@ -213,10 +272,6 @@ classdef PR_DotsflowReplay < handle
         PR.FlowHistory = o.FlowHistory;
         PR.startTime = o.startTime;
         PR.endTime = o.endTime;
-        PR.TrialCount = o.TrialCount;
-        PR.FCC = o.FCC;
-        PR.fcc=o.fcc;
-        PR.Flashtime = o.Flashtime;
         
         %******* this is also where you could store Gabor Flash Info
         

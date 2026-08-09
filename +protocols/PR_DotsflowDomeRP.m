@@ -1,20 +1,22 @@
-%% protocol for Dotsflow_dirRandom 
+%% protocol for Dotsflow_Replay
 
-classdef PR_Dotsflow_MTImaging < handle
+classdef PR_DotsflowDomeRP < handle
   % Matlab class for running an experimental protocl
   % The class constructor can be called with a range of arguments:
   
   properties (Access = public), 
-        Iti double = 10;
-        itiStart double = 0;        % start of iti interval
+       
        startTime double = 0; % trial start time = stimStart 
        endTime double   = 0; % trial end time = stimEnd        
        rewardCount double = 0;    % counter for reward drops
        FrameCount double = 0;
-       MaxFrame double = 10*240+2; %24*240+2
+       FCC double =0;
+       fcc double =0;
+       MaxFrame double = 10*240;%10*60;
        FlowHistory double = [];
+       TrialCount double = 0;
+       %**** Photodiode flash timing
        Flashtime = [];
-              
   end
       
   properties (Access = private)
@@ -25,11 +27,7 @@ classdef PR_Dotsflow_MTImaging < handle
     P;      % copy of Params struct (loaded per trial)
     trialsList; % a list of trials to run in the experiment 
     trialIndexer = [];
-    stimEnds = [];
-    grayEnds = [];
-    cycleTime =[];
-    flowSign = 1;
-    init=0;
+    FlowHis = [];
 
     %********* stimulus structs for use
     hFlow = []        % object for Dots flow 
@@ -39,37 +37,28 @@ classdef PR_Dotsflow_MTImaging < handle
   end
   
   methods (Access = public)
-      function o = PR_Dotsflow_MTImaging(winPtr)
-          o.winPtr = winPtr;
-          o.trialsList = [];
-      end
+      function o = PR_DotsflowDomeRP(winPtr)
+      o.winPtr = winPtr; 
+      o.trialsList = [];
 
-      function state = get_state(o)
-          state = o.state;
-      end
+      load('FlowHis.mat');
+      o.FlowHis = flowhis;
 
-      function generate_trialsList(o,S,P)          
-            % Generate trials list - just the trial index for this protocol
-            o.trialsList = [1:S.finish];
-            
+    end
+    
+    function state = get_state(o)
+        state = o.state;
     end
     
     function initFunc(o,S,P)
 
         %********** Set-up for trial indexing (required) 
-        cors = [0];  % count these errors as correct trials
-       reps = [1:7];  % count these errors like aborts, repeat
-       if (~isempty(o.trialsList))
-         o.trialIndexer = marmoview.TrialIndexer(o.trialsList,P,cors,reps);
-       else
-         disp('Error generating proper trialsList .... check function');
-       end
-       o.error = 0;
-        
+        o.error = 0;
+%        o.trialIndexer = marmoview.TrialIndexer(o.trialsList,P);
  
          %********** Initialize Graphics Objects
-         o.hFlow = stimuli.dotspatial_MTImaging(o.winPtr);   % dots flow stimulus
-         o.FlowHistory = zeros(o.MaxFrame,10,P.numDots);
+         o.hFlow = stimuli.dotspatial_DomeRP(o.winPtr);   % dots flow stimulus
+         o.FlowHistory = zeros(o.MaxFrame,3,300);
          
     end
    
@@ -78,28 +67,32 @@ classdef PR_Dotsflow_MTImaging < handle
        
     end
    
-    
+    function generate_trialsList(o,S,P)
+           % nothing for this protocol
+           
+            % Generate trials list - just the trial index for this protocol
+            o.trialsList = [1:S.finish];
+            
+    end
     
     function P = next_trial(o,S,P)
           %********************
           o.S = S;
-          o.P = P;
-          o.Flashtime = [];
+          o.P = P;    
+          o.FrameCount = 0;
+          
+          o.TrialCount = o.TrialCount + 1;
           %*******************
         
           if P.runType == 1   % go through trials list    
-                i = o.trialIndexer.getNextTrial(o.error);
-                     %***************
-                     P.dirSeq = o.trialsList(i,:);
-                     
-                     %******************
+                %i = o.trialIndexer.getNextTrial(o.error);
                 %****** update trial parameters for next trial
               
                 %******************
-               
                 o.P = P;  % set to most current
           end
-                   
+          
+         
 
           % Make dots flow stimulus texture (?)
             o.hFlow.size = P.size;
@@ -112,6 +105,7 @@ classdef PR_Dotsflow_MTImaging < handle
             o.hFlow.color = P.color;
             o.hFlow.pixPerDeg = S.pixPerDeg;
             o.hFlow.dotType = P.dotType;
+            %o.hFlow.FlowHis = P.FlowHis;
 
           %******************************************
     end
@@ -128,11 +122,6 @@ classdef PR_Dotsflow_MTImaging < handle
           o.error = 0; % Start with error as 0 - no error 
           
           o.startTime = GetSecs;
-          o.stimEnds = o.P.stimEnds;
-          o.grayEnds = o.P.grayEnds;
-          o.cycleTime = o.P.cycleTime;
-          o.init = 0;
-          o.Iti = o.P.iti; 
 
           FP(1).states = [];  %before fixation
           
@@ -146,87 +135,81 @@ classdef PR_Dotsflow_MTImaging < handle
         if (o.state < 1) % as the flow finishes its presentation, state turns to 1 from 0
             keepgoing = 1;
         end
+        if (o.FrameCount)
+           o.FlowHistory(o.FrameCount,1,:) = screenTime;  %store screen flip 
+        end
     end
    
     %******************** THIS IS THE BIG FUNCTION *************
-    function drop = state_and_screen_update(o,currentTime,x,y,varargin)
+    function drop = state_and_screen_update(o,currentTime,x,y,varargin) 
         drop = 0;
-        outputs = {};
-        if length(varargin)>1
-            outputs = varargin{2};
-        end
         %******* THIS PART CHANGES WITH EACH PROTOCOL ****************
-
+        
         %%%%% STATE 0 -- GET INTO THE DOTS FLOW PRESENTATION %%%%%%%
-        % STATE SPECIFIC DRAWS
-
-        % calculate x & y-shift based on direction condition and time
-
-
-        if o.state == 0 && currentTime < o.startTime + o.P.trialdur
-            inputs=varargin{:};
-            xshift = 0;
-            yshift = 0; 
-            flowsign = 0;
-            for i =1:length(o.stimEnds)
-                if (currentTime-o.startTime)<=o.cycleTime(o.stimEnds(i))&&(currentTime-o.startTime)...
-                        >=o.cycleTime(o.stimEnds(i)-1)
-
-                    o.hFlow.beforeFrame();
-                    if mod(i,2)==0
-                        flowsign = 1;
-                    elseif mod(i,2)==1
-                        flowsign =-1;
-                    end 
-
-                    if o.FrameCount ==0
-                        o.init =1;
-                    elseif abs(flowsign+o.FlowHistory(o.FrameCount,6,1))==1
-                        o.init=1;
-                    else
-                        o.init=0;
-                    end  
-
-                    o.hFlow.afterFrame(xshift, yshift,flowsign,o.init);
-
-                end
+   
+        
+        inputs=varargin{:};
+        for ll=1:length(inputs)
+            inputclass{ll}=class(inputs{ll});
+            if strcmp(inputclass{ll},'marmoview.treadmill_arduino')
+                usetreadmill=1;
+                treadmillINind=ll;
+            else
+                usetreadmill=0;
             end
-
-
-            o.FrameCount = o.FrameCount + 1;
-            % NOTE: store screen time in "continue_run_trial" after flip
-            o.FlowHistory(o.FrameCount,1,:) = o.hFlow.x;  % store x
-            o.FlowHistory(o.FrameCount,2,:) = o.hFlow.y;  % store y
-            o.FlowHistory(o.FrameCount,3:5,:) = o.hFlow.color;
-            o.FlowHistory(o.FrameCount,6,:) = flowsign;
-            o.FlowHistory(o.FrameCount,7,:) = o.init;
-
-            %**************************************************************
         end
+ 
+       
+        % STATE SPECIFIC DRAWS
+        
+        if o.state == 0 && currentTime < o.startTime + o.P.trialdur && o.FrameCount
+            o.FrameCount = o.FrameCount + 1;
+            replayx = o.FlowHis(o.TrialCount,o.FrameCount,1,:);
+
+            replayy = o.FlowHis(o.TrialCount,o.FrameCount,2,:);
+            replaycolor = squeeze(o.FlowHis(o.TrialCount,o.FrameCount,3:5,:));
+
+            o.hFlow.beforeFrame(replayx,replayy,replaycolor);
+            o.hFlow.afterFrame();
+            o.FrameCount
+            o.FCC = o.FCC +1;
+
+
+        end 
 
         if o.state == 0 && currentTime > o.startTime + o.P.trialdur
             o.state = 1; % Move to iti -- inter-trial interval
             o.error = 0; % Error 1 is failure to initiate
-            o.FrameCount = 0; % reset the frame count
-            o.rewardCount = o.rewardCount + 1;
-            drop = 1;
+            o.fcc=o.FrameCount;
+            o.FrameCount = 0; % reset the frame count 
+            %o.FCC = o.FCC +1;
             o.endTime = GetSecs;
-            o.itiStart = GetSecs;
         end
-        %%%%%%% PHOTODIODE
-        o.Flashtime = marmoview.updatePhotodiode(o.winPtr,o.S,outputs,o.FrameCount,currentTime,o.Flashtime);
-
-        
-    end 
+          
+       %  %% PHOTODIODE FLASH, move to frame control(?)
+%         %DPR - 5/5/2023
+        if isfield(o.S,'photodiode')
+            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
+                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
+            else
+                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
+            end
+       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
+        end
+       
+        %**************************************************************
+    end
     
     
     function Iti = end_run_trial(o)
-        Iti = o.Iti - (GetSecs - o.itiStart); % returns generic Iti interval
+        Iti = 0.5; % returns generic Iti interval
     end
     
     function plot_trace(o,handles)
         % This function plots the eye trace from a trial in the EyeTracker
-        % window of MarmoView.       
+        % window of MarmoView.
+
+        
     end
     
     function PR = end_plots(o,P,A)   %update D struct if passing back info
@@ -237,7 +220,10 @@ classdef PR_Dotsflow_MTImaging < handle
         PR.FlowHistory = o.FlowHistory;
         PR.startTime = o.startTime;
         PR.endTime = o.endTime;
-        PR.Flashtime = o.Flashtime;
+        PR.TrialCount = o.TrialCount;
+        PR.FCC = o.FCC;
+        PR.fcc=o.fcc;
+        
         %******* this is also where you could store Gabor Flash Info
         
         %%%% Record some data %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

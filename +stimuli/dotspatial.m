@@ -79,8 +79,8 @@ classdef dotspatial < stimuli.stimulus
             ip = inputParser();
             ip.KeepUnmatched = true;
             ip.StructExpand = true;
-            ip.addParameter('size',25.0); % pixels?
-            ip.addParameter('speed',5); % deg./s
+            ip.addParameter('size',10.0); % pixels?
+            ip.addParameter('speed',0.02); % deg./s
             ip.addParameter('direction',180.0,@(x) isscalar(x) && isreal(x)); % deg.
             ip.addParameter('numDots',300,@(x) ceil(x));
             ip.addParameter('lifetime',Inf);
@@ -95,7 +95,7 @@ classdef dotspatial < stimuli.stimulus
             ip.addParameter('frameUpdate', 0)
             ip.addParameter('sigma', inf)
           
-            ip.addParameter('pixPerDeg',50)
+            ip.addParameter('pixPerDeg',51.4418)
             ip.addParameter('dotType',1)
             ip.parse(varargin{:});
             obj.lifetime = Inf;
@@ -241,7 +241,7 @@ classdef dotspatial < stimuli.stimulus
 
             win = [obj.winRect(3)/2, obj.winRect(4)./2];
             
-            idx = find(obj.x > win(1) | obj.x < -win(1) | obj.y > win(2)|obj.y < -win(2) |obj.yr <= 0)'; 
+            idx = find(obj.x > win(1) | obj.x < -win(1) | obj.y > win(2)|obj.y < -win(2) |obj.yr <= 0 |obj.yr>=300)'; 
             if ~isempty(idx)
             
                 % (re-)place dots randomly within the aperture

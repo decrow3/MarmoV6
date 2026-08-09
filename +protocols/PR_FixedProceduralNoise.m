@@ -922,6 +922,7 @@ classdef PR_FixedProceduralNoise < protocols.protocol
    
     %******************** THIS IS THE BIG FUNCTION *************
     function drop = state_and_screen_update(o,currentTime,x,y, varargin) 
+         outputs = {};
          if ~isempty(varargin)
              inputs=varargin{1};
              if length(varargin)>1
@@ -1039,50 +1040,7 @@ classdef PR_FixedProceduralNoise < protocols.protocol
 %         Screen('DrawingFinished', o.winPtr);
 
 
-%         %% PHOTODIODE FLASH, move to frame control/ output(?)
-%         This is gross, this is why we have independant outputs
-%         %DPR - 5/5/2023
-        if isfield(o.S,'photodiode')
-            if ~isempty(o.S.outputs)
-                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
-                ardout=find(cellfun(@(x) strcmp(x,'output_arduino'), o.S.outputs));
-                ljout=find(cellfun(@(x) strcmp(x,'output_labjackU12'), o.S.outputs));
-            else
-                dpout=0;
-                ardout=0;
-                ljout=0;
-            end
-            
-            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)<=1 % first frame flash photodiode
-                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
-                
-                %Should be <20 so shouldn't need to preallocate but..
-                o.Flashtime=[o.Flashtime; currentTime];
-
-                if dpout
-                    %ttl4 high
-                    outputs{dpout}.flipBitVideoSync(4,1);
-                elseif ardout
-                    %ttl4 high
-                    outputs{ardout}.flipBit(4,1); %pin 11? should be most sig bit
-                elseif ljout
-                    %IO3 (forth bit) high
-                    outputs{ljout}.flipBit(4-1,1); %
-                end
-            else
-                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
-                if dpout
-                    %ttl4 low
-                    outputs{dpout}.flipBitVideoSync(4,0);
-                elseif ardout
-                    %ttl4 high
-                    outputs{ardout}.flipBit(4,0);
-                elseif ljout
-                    %IO3 (forth bit) high
-                    outputs{ljout}.flipBit(4-1,0);
-                end
-            end
-        end
+        o.Flashtime = marmoview.updatePhotodiode(o.winPtr,o.S,outputs,o.FrameCount,currentTime,o.Flashtime);
     end
     
     function Iti = end_run_trial(o)

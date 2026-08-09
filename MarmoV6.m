@@ -180,7 +180,12 @@ classdef MarmoV6 < matlab.apps.AppBase
                     end
                     clear zdata;
                     %********
-                    save(fullfile(app.outputPath,NewOutput),'S','D','PR_mfile');   % append file
+                    Dwho=whos('D');
+                    if Dwho.bytes>1024^3 %>1GB, use v7.3 saving
+                        save(fullfile(app.outputPath,NewOutput),'-v7.3','S','D','PR_mfile');   % append file
+                    else
+                        save(fullfile(app.outputPath,NewOutput),'S','D','PR_mfile');   % append file
+                    end
                     clear D;
                     fprintf('Data file %s reformatted.\n',NewOutput);
                 end
@@ -545,12 +550,6 @@ classdef MarmoV6 < matlab.apps.AppBase
                 %Default calibration for that eyetracker
                 app.C=app.eyetrack.calibinit(app.S);
             end
-
-            %Special case, dummy tracker:
-            if app.eyetrackername=='eyetrack_dummy'
-                app.C=app.eyetrack.calibinit(app.S);
-            end
-
             % Load calibration variables into the A structure to be changed if needed
             app.A.dx = app.C.dx;
             app.A.dy = app.C.dy;
@@ -660,10 +659,10 @@ classdef MarmoV6 < matlab.apps.AppBase
                 app.inputs{i}.startfile(); %app.A.outputFile
             end
             
-            % initialize outputs
-            for i = 1:numel(app.outputs)
-                app.outputs{i}.startfile(app);%app.A.outputFile
-            end
+%             % initialize outputs
+%             for i = 1:numel(app.outputs)
+%                 app.outputs{i}.init(app);
+%             end
         %
         
             % Show the file name on the GUI
@@ -1002,10 +1001,9 @@ classdef MarmoV6 < matlab.apps.AppBase
                     %app.inputs{i}.starttrial(app.inputs{i},STARTCLOCK,STARTCLOCKTIME);
                 end
             
-                 % TODO: OUTPUT STROBING GOES HERE, NEED TO SAVE THESE SENT
-                 % TIMES SOMEWHERE
+                 % TODO: OUTPUT STROBING GOES HERE
                 for i=1:length(app.outputs)
-                    app.outputs{i}.StartTimings=app.outputs{i}.starttrial(STARTCLOCK,STARTCLOCKTIME);
+                    app.outputs{i}.starttrial(STARTCLOCK,STARTCLOCKTIME);
                 end
             
             
@@ -1025,21 +1023,21 @@ classdef MarmoV6 < matlab.apps.AppBase
             
                     %%%%% GET INPUT VALUES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                     % TODO: THIS SHOULD ALSO BE WHERE IT CHECKS IF IT
-                    % ALREADY HAS INPUTS (i.e., for replay). Keep these
-                    % small! 
-                    % Do we want to be passing the full app.inputs to state
-                    % and screen update every frame? This includes objects
-                    % and parameters from the input class file, not just 
-                    % the current values of inputs/outputs
-                    % TODO: create a 'pass' variable structure?  
-                    %                   only including name, value
+                    % ALREADY HAS INPUTS (i.e., for replay)
                     for i=1:length(app.inputs)
                         %Load other inputs here?
                         app.inputs{i}.readinput(app.inputs{i});
                     end
+
+                    %Would be good to choose which eye is being tracked
+                    %here
                     [ex,ey] = app.eyetrack.getgaze();
                     pupil = app.eyetrack.getpupil();
-            
+                    
+                    %Add call to pull eyetracking frame number here, would
+                    %be good to store in the main Framecontrol eyedata
+                    %matrix
+                    %eyeframe = app.eyetrack.getframe();
             
                     % can we pass a state handle of some sort without overhead?
                     [currentTime,x,y] = app.FC.grabeye_run_trial(state,[ex,ey],pupil);
@@ -1052,9 +1050,9 @@ classdef MarmoV6 < matlab.apps.AppBase
                     % THIS IS THE MAIN PROTOCOL STATE UPDATE METHOD
                     %"DROP" is a droplet of juice, reward based on on state
                     %and state update 
-                    drop = PR.state_and_screen_update(currentTime,x,y,app.inputs,app.outputs);
+                    drop = PR.state_and_screen_update(currentTime,x,y,app.inputs);
             
-
+            
                     %Additional independant rewards based on inputs (eg treadmill
                     %distance)
                     for i=1:length(app.inputs)
@@ -1077,11 +1075,11 @@ classdef MarmoV6 < matlab.apps.AppBase
                             rewardtimes = [rewardtimes droptime];
                             app.reward.deliver();
                         else
-                            dropreject = dropreject + 1;
+                            dropreject = dropreject + 1
                         end
                     end
             
-                    %Update state value after running stim gen 
+                    %Update state value after running stim gen (6/9/2025)
                     state = PR.get_state();
 
                     %**********************************
@@ -1120,7 +1118,7 @@ classdef MarmoV6 < matlab.apps.AppBase
             
                  % TODO: OUTPUT STROBING GOES HERE
                 for i=1:length(app.outputs)
-                    app.outputs{i}.EndTimings=app.outputs{i}.endtrial(ENDCLOCK,ENDCLOCKTIME);
+                    app.outputs{i}.endtrial(ENDCLOCK,ENDCLOCKTIME);
                 end
             
             
@@ -1382,7 +1380,7 @@ classdef MarmoV6 < matlab.apps.AppBase
             end
             
             for i=1:length(app.outputs)
-                app.outputs{i}.closefile(app);
+                app.outputs{i}.closefile();
             end
             
             %****** ADDED VIA SHAUN **********
@@ -1488,17 +1486,19 @@ classdef MarmoV6 < matlab.apps.AppBase
             app.reward.report()
             delete(app.reward); app.reward = NaN;
         
-            % Save any changes to the calibration
-            c = app.A.c; %#ok<NASGU>    Supressing editor errors because theses
-            dx = app.A.dx; %#ok<NASGU>  variables are being saved
-            dy = app.A.dy; %#ok<NASGU>
-        %     if ~app.S.DummyEye
-        %         save(fullfile(app.supportPath, 'MarmoViewLastCalib.mat'),'c','dx','dy');
-        %     end
+            if isfield(app.A,'c')
+                % Save any changes to the calibration
+                c = app.A.c; %#ok<NASGU>    Supressing editor errors because theses
+                dx = app.A.dx; %#ok<NASGU>  variables are being saved
+                dy = app.A.dy; %#ok<NASGU>
+            %     if ~app.S.DummyEye
+            %         save(fullfile(app.supportPath, 'MarmoViewLastCalib.mat'),'c','dx','dy');
+            %     end
+    
+                Calibfname=[(app.eyetrackername) '_' app.outputSubject '_Calib.mat'];
+                save(fullfile(app.supportPath,'Calibrations',Calibfname),'c','dx','dy');
+            end
 
-            Calibfname=[(app.eyetrackername) '_' app.outputSubject '_Calib.mat'];
-            save(fullfile(app.supportPath,'Calibrations',Calibfname),'c','dx','dy');
-        
             %CLOSE ALL INPUTS AND OUTPUTS
             for i=1:length(app.inputs)
                 app.inputs{i}.close;

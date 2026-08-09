@@ -1,5 +1,5 @@
 
-function [S,P] = Dotsflow_replay()
+function [S,P] = Dotsflow_DomeCL()
 
 %%%% NECESSARY VARIABLES FOR GUI
 %%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -14,10 +14,10 @@ S = MarmoViewRigSettings;
 S.MarmoViewVersion = '6';
 
 % PARAMETER DESCRIBING TRIAL NUMBER TO STOP TASK
-S.finish = 30; % 
+S.finish = 150; % 
 
 % PROTOCOL PREFIX
-S.protocol = 'DotsflowReplay';
+S.protocol = 'DotsflowDomeCL';
 % PROTOCOL PREFIXS
 S.protocol_class = ['protocols.PR_',S.protocol];
 
@@ -34,7 +34,7 @@ S.TimeSensitive = 1:7;
 
 % Define Banner text to identify the experimental protocol
 % recommend maximum of ~28 characters
-S.protocolTitle = 'Flow field on Treadmill';
+S.protocolTitle = 'Flow field in Dome';
 
 %%%%% END OF NECESSARY VARIABLES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -52,12 +52,8 @@ P.trialdur = 10; % this is also the stimulus duration
 S.trialdur = 'Trial/Dots Flow Duration (s):';
 
 %************** stimulus settings 
-% load('FlowHis.mat');
-% P.FlowHis = flowhis;
-% S.FlowHis = 'Dots flow history replay';
-
-P.size = 34; % 0.8
-S.size = 'Dot size (pix)';
+P.size = 24;
+S.size = 'Dot size (pix)'; % 0.85 visual deg 
 P.speed = 5;
 S.speed = 'Dot motion speed for passive viewing (deg/s)';
 P.direction = 180;
@@ -65,8 +61,8 @@ S.direction = 'Initialized dots direction (deg)';
 P.numDots = 300;
 S.numDots = 'Number of dots';
 P.lifetime = Inf;
-S.lifetime = 'Lifetime of the dots (s)';
-P.maxRadius = 10;
+S.lifetime = 'Lifetime of the dots (frames)';
+P.maxRadius = 25; %25 for MT 
 S.maxRadius = 'Maximum radius of the dots';
 P.position = S.screenRect(3:4).*0.5;
 S.position = 'Origin position in draw dots function';

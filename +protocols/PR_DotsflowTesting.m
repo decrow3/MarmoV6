@@ -10,7 +10,7 @@ classdef PR_DotsflowTesting < handle
        endTime double   = 0; % trial end time = stimEnd        
        rewardCount double = 0;    % counter for reward drops
        FrameCount double = 0;
-       MaxFrame double = 10*60;
+       MaxFrame double = 10*240;%10*60;
        FlowHistory double = [];
        %**** Photodiode flash timing
        Flashtime = [];
@@ -71,7 +71,8 @@ classdef PR_DotsflowTesting < handle
     function P = next_trial(o,S,P)
           %********************
           o.S = S;
-          o.P = P;       
+          o.P = P;
+          o.Flashtime = [];
           %*******************
         
           if P.runType == 1   % go through trials list    
@@ -133,6 +134,10 @@ classdef PR_DotsflowTesting < handle
     %******************** THIS IS THE BIG FUNCTION *************
     function drop = state_and_screen_update(o,currentTime,x,y,varargin) 
         drop = 0;
+        outputs = {};
+        if length(varargin)>1
+            outputs = varargin{2};
+        end
         %******* THIS PART CHANGES WITH EACH PROTOCOL ****************
         
         %%%%% STATE 0 -- GET INTO THE DOTS FLOW PRESENTATION %%%%%%%
@@ -211,17 +216,7 @@ classdef PR_DotsflowTesting < handle
             o.FrameCount = 0; % reset the frame count 
             o.endTime = GetSecs;
         end
-          
-        % %% PHOTODIODE FLASH, move to frame control(?)
-%         %DPR - 5/5/2023
-        if isfield(o.S,'photodiode')
-            if rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
-                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
-            else
-                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
-            end
-       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
-        end
+        o.Flashtime = marmoview.updatePhotodiode(o.winPtr,o.S,outputs,o.FrameCount,currentTime,o.Flashtime);
        
         %**************************************************************
     end
@@ -246,6 +241,7 @@ classdef PR_DotsflowTesting < handle
         PR.FlowHistory = o.FlowHistory;
         PR.startTime = o.startTime;
         PR.endTime = o.endTime;
+        PR.Flashtime = o.Flashtime;
         
         %******* this is also where you could store Gabor Flash Info
         

@@ -42,6 +42,8 @@ classdef opticflow < stimuli.stimulus
     frameCnt double;
     lifetime double = Inf;
     centerDecay logical = true; %flag to cull central dots
+    centerDecayRadii double = [0.5 1.5 2.5 5]; % dot-size units; TDM was [0.15 0.25 0.5 1.5]
+    centerDecaySteps double = [1 5 15 30]; % replace every Nth dot inside each radius
 
     % cartessian coordinates (relative to center of screen/aperture?)
     x; % x coords (pixels) (nDots, 1)
@@ -92,8 +94,11 @@ classdef opticflow < stimuli.stimulus
     p.addParameter('Xbot',o.Xbot, isfloat); % min X (pixels)
     p.addParameter('Ytop',o.Ytop, isfloat); % max Y (pixels)
     p.addParameter('Ybot',o.Ybot, isfloat); % min Y (pixels)
+    p.addParameter('centerDecay',o.centerDecay, @(x) islogical(x) || isnumeric(x));
+    p.addParameter('centerDecayRadii',o.centerDecayRadii, isfloat);
+    p.addParameter('centerDecaySteps',o.centerDecaySteps, isfloat);
 
-                  
+
       try
         p.parse(args{:});
       catch
@@ -117,6 +122,9 @@ classdef opticflow < stimuli.stimulus
       o.Xbot = args.Xbot;
       o.Ytop = args.Ytop;
       o.Ybot = args.Ybot;
+      o.centerDecay = logical(args.centerDecay);
+      o.centerDecayRadii = args.centerDecayRadii;
+      o.centerDecaySteps = args.centerDecaySteps;
 
     end
     
@@ -217,29 +225,29 @@ classdef opticflow < stimuli.stimulus
           %***** replace 
            iireplace = (o.x > o.Xtop) | (o.x < o.Xbot) | (o.y < o.Ytop) | (o.y > o.Ybot) ; %Leaving Y inverted for now  
            
-           %also replace dots below a min radius, this is a placeholder
-           %until we can do this with a probabilty function depending on
-           %distance from center
-           tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < .5*o.size;
-           indclose1=find(tooclose);
-           
+           centerDist = hypot(o.x-o.position(1), o.y-o.position(2));
+           radii = o.centerDecayRadii(:);
+           steps = max(1, round(o.centerDecaySteps(:)));
+           if isempty(radii)
+               radii = 0.5;
+           end
+           if isempty(steps)
+               steps = 1;
+           end
+           if numel(steps) < numel(radii)
+               steps(end+1:numel(radii),1) = steps(end);
+           end
+
            if o.centerDecay
-               % Start culling further out
-                tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < 1.5*o.size;
-               indclose2=find(tooclose); %remove 1/15
-               indclose2=indclose2(1:5:end);
-    
-               tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < 2.5*o.size;
-               indclose3=find(tooclose); %remove 1/15
-               indclose3=indclose3(1:15:end);
-    
-               tooclose=hypot(o.x-o.position(1), o.y-o.position(2)) < 5*o.size;
-               indclose4=find(tooclose);%remove 1/30
-               indclose4=indclose4(1:30:end);
-    
-               indcloseall = unique([indclose1; indclose2; indclose3; indclose4]);
-               o.initDots(union(find(iireplace),indcloseall));
+               indcloseall = [];
+               for ii = 1:numel(radii)
+                   indclose = find(centerDist < radii(ii)*o.size);
+                   indcloseall = [indcloseall; indclose(1:steps(ii):end)];
+               end
+               o.initDots(union(find(iireplace),unique(indcloseall)));
            else
+               tooclose = centerDist < radii(1)*o.size;
+               indclose1 = find(tooclose);
                o.initDots(union(find(iireplace),indclose1));
            end
 
@@ -262,7 +270,7 @@ classdef opticflow < stimuli.stimulus
 
     end
     
-    function drawDots(o)     
+    function drawDots(o)
       dotColour = o.colour; %zeros([1,3]); %repmat(0,1,3);
       
       % dotType:
@@ -283,6 +291,40 @@ classdef opticflow < stimuli.stimulus
         % corner, do positional math elsewhere
         Screen('DrawDots',o.winPtr,[o.x(:), o.y(:)]', o.size, colmat', [0,0], dotType);
 
+    end
+
+    function setCenterDecayProfile(o,profile)
+      if isnumeric(profile)
+          switch profile
+              case 0
+                  profile = 'off';
+              case 1
+                  profile = 'laser';
+              case 2
+                  profile = 'tdm';
+              otherwise
+                  error('opticflow:UnknownCenterDecayProfile', ...
+                      'Unknown numeric center-decay profile: %g', profile);
+          end
+      end
+
+      switch lower(char(profile))
+          case {'laser','laserdefault'}
+              o.centerDecay = true;
+              o.centerDecayRadii = [0.5 1.5 2.5 5];
+              o.centerDecaySteps = [1 5 15 30];
+          case {'tdm','treadmill'}
+              o.centerDecay = true;
+              o.centerDecayRadii = [0.15 0.25 0.5 1.5];
+              o.centerDecaySteps = [1 5 15 30];
+          case {'off','none'}
+              o.centerDecay = false;
+              o.centerDecayRadii = 0.5;
+              o.centerDecaySteps = 1;
+          otherwise
+              error('opticflow:UnknownCenterDecayProfile', ...
+                  'Unknown center-decay profile: %s', char(profile));
+      end
     end
   end % methods
   

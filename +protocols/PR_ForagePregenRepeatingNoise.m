@@ -50,6 +50,7 @@ classdef PR_ForagePregenRepeatingNoise < protocols.protocol
     StimBank = [];
     StimList = [];
     StimBankRng = []; % Rng object
+    tex =[];
     nFrames= 2500;
   end
   
@@ -89,7 +90,7 @@ classdef PR_ForagePregenRepeatingNoise < protocols.protocol
            o.hProbe{kk} = stimuli.grating(o.winPtr);  % grating probe
            o.hProbe{kk}.transparent = -P.probecon;  % blend in proportion to gauss
            o.hProbe{kk}.gauss = true;
-           o.hProbe{kk}.pixPerDeg = S.pixPerDeg;
+           o.hProbe{kk}.pixperdeg = S.pixPerDeg;
            o.hProbe{kk}.radius = round(P.proberadius*S.pixPerDeg);
           
            o.hProbe{kk}.range = P.proberange;
@@ -189,6 +190,11 @@ classdef PR_ForagePregenRepeatingNoise < protocols.protocol
                     o.StimBank{ii}.tex=Screen('MakeTexture', o.winPtr, StimFramesu8(:,:,ii));
                 end
 
+                %Re-blank screen
+                Screen('FillRect', o.winPtr ,S.bgColour)
+                Screen('Flip', o.winPtr)
+
+
                 %Saving is tricky, because file names weren't passed
                 taskPath = fileparts(fileparts(mfilename('fullpath')));
                 outputPath = fullfile(taskPath, 'Output');
@@ -206,6 +212,8 @@ classdef PR_ForagePregenRepeatingNoise < protocols.protocol
                 outputFile=strcat(outputPrefix,'_',outputSubject,'_',outputDate,'_',outputSuffix,'_Stim.mat');
                 save(fullfile(outputPath,outputFile), '-v7.3', 'StimFramesu8');
                 
+               
+
                 %Save out stimuli to file
                 %save('Rocky20240427_V2V1_RepeatingStim_int8', '-v7.3', 'StimFrames')
                 %save(fullfile(app.outputPath, [A.outputFile '_stimuli']), '-v7.3', 'StimFrames')
@@ -385,6 +393,7 @@ classdef PR_ForagePregenRepeatingNoise < protocols.protocol
                          o.hNoise.x=o.StimBank{ii}.x;
                          o.hNoise.y=o.StimBank{ii}.y;
                          o.hNoise.mypars=o.StimBank{ii}.mypars;
+                         o.tex=o.StimBank{ii}.tex; %current texture
                              
                          %**********
                          o.FrameCount = o.FrameCount + 1;
@@ -398,7 +407,7 @@ classdef PR_ForagePregenRepeatingNoise < protocols.protocol
 %                      o.hNoise.beforeFrame(); % always draw
 
                     %Draw from texture bank
-                    Screen('DrawTexture', o.winPtr, o.StimBank{ii}.tex);
+                    Screen('DrawTexture', o.winPtr, o.tex);
                     o.hNoise.frameUpdate = mod(o.hNoise.frameUpdate +1, o.hNoise.updateEveryNFrames);
              end
             %****************
@@ -525,6 +534,7 @@ classdef PR_ForagePregenRepeatingNoise < protocols.protocol
    
     %******************** THIS IS THE BIG FUNCTION *************
     function drop = state_and_screen_update(o,currentTime,x,y, varargin) 
+         outputs = {};
          if ~isempty(varargin)
              inputs=varargin{1};
              if length(varargin)>1
@@ -599,47 +609,8 @@ classdef PR_ForagePregenRepeatingNoise < protocols.protocol
 %         Screen('DrawingFinished', o.winPtr);
 
 
-%         %% PHOTODIODE FLASH, move to frame control/ output(?)
-%         This is gross, this is why we have independant outputs
-%         %DPR - 5/5/2023
-        if isfield(o.S,'photodiode')
-            if ~isempty(o.S.outputs)
-                dpout=find(cellfun(@(x) strcmp(x,'output_datapixx2'), o.S.outputs));
-                ardout=find(cellfun(@(x) strcmp(x,'output_arduino'), o.S.outputs));
-            else
-                dpout=0;
-                ardout=0;
-            end
-
-            if rem(o.PFrameCount,o.S.frameRate/o.S.photodiode.TF)==1 % first frame flash photodiode
-                Screen('FillRect',o.winPtr,o.S.photodiode.flash,o.S.photodiode.rect)
-                
-                %Should be <20 so shouldn't need to preallocate but..
-                o.Flashtime=[o.Flashtime; currentTime];
-
-                if dpout
-                    %ttl-4 high
-                    timings=outputs{dpout}.flipBitNoSync(4,1);
-                elseif ardout
-                    %ttl-4 high
-                    timings=outputs{ardout}.flipBit(4,1);
-                else
-                    timings=[];
-                end
-                %Should be <20 so shouldn't need to preallocate but..
-                o.FlashOutTimings=[o.FlashOutTimings; timings];
-            else % Send every frame? This seems really unnecessary, and may slow things down
-                Screen('FillRect',o.winPtr,o.S.photodiode.init,o.S.photodiode.rect)
-                if dpout
-                    %ttl4 low
-                    [~]=outputs{dpout}.flipBitNoSync(4,0);
-                elseif ardout
-                    %ttl-4 low
-                    [~]=outputs{ardout}.flipBit(4,0);
-                end
-            end
-       % disp(rem(o.FrameCount,o.S.frameRate/o.S.photodiode.TF))
-        end
+        [o.Flashtime,o.FlashOutTimings] = marmoview.updatePhotodiode( ...
+            o.winPtr,o.S,outputs,o.PFrameCount,currentTime,o.Flashtime,o.FlashOutTimings);
     end
     
     function Iti = end_run_trial(o)

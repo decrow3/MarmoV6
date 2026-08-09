@@ -4,25 +4,25 @@ classdef PR_BackVideo < handle
   % The class constructor can be called with a range of arguments:
   %
   
-  properties (Access = public),    
-       Iti@double = 1;        % default Iti duration
-       startTime@double = 0;  % trial start time
-       imageOff@double = 0;   % offset of image
-       videostartTime@double = 0; % start of playing video
-       videoendTime@double = 0;
+  properties (Access = public)    
+       Iti double = 1;        % default Iti duration
+       startTime double = 0;  % trial start time
+       imageOff double = 0;   % offset of image
+       videostartTime double = 0; % start of playing video
+       videoendTime double = 0;
        JuiceTimer = 0;
   end
       
   properties (Access = private)
     winPtr; % ptb window
-    state@double = 0;      % state countern trial
-    error@double = 0;      % default, need defined even if always 0
+    state double = 0;      % state countern trial
+    error double = 0;      % default, need defined even if always 0
    %************
     S;      % copy of Settings struct (loaded per trial start)
     P;      % copy of Params struct (loaded per trial)
     ImoScreen = [];    % image to display, full screen
     vidObj = [];       % VideoReader object
-    ImoMaxN = 1200;     % max number of video frames stored into textures
+    ImoMaxN = 11520;     % max number of video frames stored into textures
     ImoCount = 1;
     ImoRect = [];
     ScreenRect = [];
@@ -135,10 +135,11 @@ classdef PR_BackVideo < handle
           end    
           %********************
           o.ImoCount = 0;  % start with static natural image and use timer
+          o.FrameRepCounter=0;
 
         %To draw as close as possible to the original frame rate, round the
         %marmoview rate to the nearest multiple of the video rate.
-        o.nRepsPerFrame=round(S.frameRate/o.vidObj.FrameRate);
+        o.nRepsPerFrame=round(S.frameRate/o.vidObj.FrameRate)-1;
     end
 
     function [FP,TS] = prep_run_trial(o)
@@ -198,10 +199,28 @@ classdef PR_BackVideo < handle
                    Screen('Close',o.VideoScreen);
                 end
                 if hasFrame(o.vidObj)
-                   o.imostill = readFrame(o.vidObj);
+                   o.imostill = readFrame(o.vidObj,'native');
+                   o.imostill = o.imostill.cdata;
                    o.ImoRect = [0 0 size(o.imostill,2) size(o.imostill,1)];
                    o.VideoScreen = Screen('MakeTexture',o.winPtr,o.imostill);
                    % Screen('DrawTexture', o.winPtr, o.imo, [], o.ImoRect);
+                   %Default was to stretch video to fix window but its not
+                   %great
+                      aspectRatio = size(o.imo,1)./size(o.imo,2);
+                      
+                      % check if there are size and position variables
+                      if isfield(o.P, 'imageSizes') && isfield(o.P, 'imageCtrX') && isfield(o.P, 'imageCtrY')
+                          imWidthDeg = randsample(o.P.imageSizes, 1);
+                          imWidthPx = o.S.pixPerDeg * imWidthDeg;
+                          imHeightPx = aspectRatio * imWidthPx;
+                          
+                          ctr = o.S.centerPix + [o.P.imageCtrX o.P.imageCtrY]*o.S.pixPerDeg;
+                          o.ScreenRect = CenterRectOnPoint([0 0 imWidthPx imHeightPx], ctr(1), ctr(2));
+                      else
+                          ctr = o.S.centerPix;
+                          o.ScreenRect = CenterRectOnPoint(o.ImoRect, ctr(1), ctr(2));
+                      end
+                   
                    Screen('DrawTextures',o.winPtr,o.VideoScreen,o.ImoRect,o.ScreenRect);
                    %********
                    o.ImoCount = o.ImoCount + 1; %Switch order here DPR 8-13-2024
@@ -221,7 +240,11 @@ classdef PR_BackVideo < handle
                 %*********
             end
         else %Don't change the image frame yet
-            Screen('DrawTextures',o.winPtr,o.VideoScreen,o.ImoRect,o.ScreenRect);
+            try
+                Screen('DrawTextures',o.winPtr,o.VideoScreen,o.ImoRect,o.ScreenRect);
+            catch
+                keyboard
+            end
             o.FrameRepCounter=o.FrameRepCounter-1;
         end
         %**************************************************************

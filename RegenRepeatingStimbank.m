@@ -1,4 +1,4 @@
-load('ForageRepeatingNoise_test_081223_18z.mat')
+load('ForageRepeatingNoise_Rocky_270424_00z.mat')
 %% Recall stim indices shown for each trial
 nTrials=length(D);
 
@@ -27,30 +27,25 @@ end
 foundframe=0;
 jj=1;
 for ii=1:o.nFrames
-    if (jj<=length(ShownStim))
-        while foundframe==0
-            if ~isempty(find(ShownStim{jj}==ii))
-                foundframe=find(ShownStim{jj}==ii);
-                foundframe_check(ii)=1;
-            else
-                jj=jj+1;
-            end
+    while foundframe==0
+        if ~isempty(find(ShownStim{jj}==ii))
+            foundframe=find(ShownStim{jj}==ii);
+        else
+            jj=jj+1;
         end
-    
-        assert(ShownStim{jj}(foundframe)==ii);
-        %check seed
-        shownparams=(D{jj}.PR.NoiseHistory(foundframe,:));
-    
-        assert(shownparams(4)==ii); %redundant check
-    
-        seedGood(ii) = all([o.StimBank{ii}.x(1) o.StimBank{ii}.mypars(2)] == shownparams(2:3));
-    
-    
-        %reset search
-        foundframe=0;jj=1;
-    else
-        foundframe_check(ii)=0;
     end
+
+    assert(ShownStim{jj}(foundframe)==ii);
+    %check seed
+    shownparams=(D{jj}.PR.NoiseHistory(foundframe,:));
+
+    assert(shownparams(4)==ii); %redundant check
+
+    seedGood(ii) = all([o.StimBank{ii}.x(1) o.StimBank{ii}.mypars(2)] == shownparams(2:3));
+
+
+    %reset search
+    foundframe=0;jj=1;
 end
 
 all(seedGood);

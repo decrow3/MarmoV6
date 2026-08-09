@@ -1,10 +1,10 @@
-classdef PR_BackImage < handle
+classdef PR_BackImageSet < handle
   % Matlab class for running an experimental protocl
   %
   % The class constructor can be called with a range of arguments:
   %
   properties (Access = public)
-       Iti double = 1;        % default Iti duration
+       Iti double = 4;        % default Iti duration
        startTime double = 0;  % trial start time
        imageOff double = 0;   % offset of image
   end
@@ -23,12 +23,20 @@ classdef PR_BackImage < handle
     ImageFile = [];
     imo = [];  % matlab image struct
     grayscale = false
-
+    nImages= 108;
+    tex=1;
+    texlist=1:108;
+    ImageHistory = [];
+    MaxFrame=[];
+    imagestart=[];
+    %**** Photodiode flash timing
+    FrameCount = 0;
     Flashtime = [];
+    %**********************************
   end
   
   methods (Access = public)
-    function o = PR_BackImage(winPtr)
+    function o = PR_BackImageSet(winPtr)
       o.winPtr = winPtr;     
     end
     
@@ -42,6 +50,79 @@ classdef PR_BackImage < handle
         if isfield(P, 'useGrayScale')
             o.grayscale = P.useGrayScale;
         end
+
+        o.MaxFrame = ceil(220*S.frameRate); %108 seconds *2 +buffer
+        o.ImageHistory = nan(o.MaxFrame,3);
+
+        % Load up images once only, park them as textures on Graphics
+        % memory rather than loading them per trial
+
+         %********************
+          o.S = S;
+          o.P = P;       
+          %*******************
+          flist = dir([o.ImageDirectory,filesep,'*.*']);
+          fext = cellfun(@(x) x(strfind(x, '.'):end), {flist.name}, 'uni', 0);
+          %for files with blah.blahblah.png etc
+          dotfiles=find(cellfun(@(x) contains(x(2:end),'.'), fext, 'uni', 1));
+          for ii=1:length(dotfiles)
+            fext{dotfiles(ii)}=fext{dotfiles(ii)}(strfind(fext{dotfiles(ii)}(2:end), '.')+1:end);
+          end
+
+          isimg = cellfun(@(x) any(strcmp(x, {'.bmp', '.png', '.jpg', '.jpeg', '.JPG', '.PNG'})), fext);
+          flist = flist(isimg);
+
+          o.closeFunc();  % clear any remaining images in memory
+                          % before you allocated more (one per time)
+          
+          %Random draw from files
+          for ii= 1:o.P.nImages
+          %******************
+          if (~isempty(flist))
+              % We need to be careful about randomising here if we are also
+              % going to randomise later
+             fimo = ii;%1 + floor( (rand * 0.99) * size(flist,1) );
+             fname = flist(fimo).name;  % name of an image
+             o.ImageFile{ii} = [o.ImageDirectory,filesep,fname];
+             o.imo{ii} = imread(o.ImageFile{ii});
+             
+             % image can't be bigger than screen. Don't waste texture size?
+             [rows,cols,~]=size(o.imo{ii});
+             if ~all([rows,cols]==S.screenRect([4 3]))
+                 [asp,rc]=min([rows,cols]./S.screenRect([4 3]));
+                 if rc==1 %crop cols
+                    ncols=round(S.screenRect([3])*asp);
+                    cut=(cols-ncols)/2;
+                    o.imo{ii}=o.imo{ii}(:,cut:end-cut,:);
+                 elseif rc==2 %crop rows
+                    nrows=round(S.screenRect([4])*asp);
+                    cut=(rows-nrows)/2;
+                    o.imo{ii}=o.imo{ii}(cut:end-cut,:,:);
+                 end
+                 o.imo{ii} = imresize(o.imo{ii}, S.screenRect([4 3]));
+             end
+
+             if o.grayscale
+                 o.imo{ii} = uint8(mean(o.imo{ii},3));
+             end
+             %******* insert image in middle texture
+             o.ImoScreen(ii) = Screen('MakeTexture',o.winPtr,o.imo{ii});
+             o.ImoRect = [0 0 size(o.imo{ii},2) size(o.imo{ii},1)];
+             o.ScreenRect = S.screenRect;
+          end
+          end
+
+          aspectRatio = size(o.imo{1},1)./size(o.imo{1},2);
+          
+          % check if there are size and position variables
+          if isfield(P, 'imageSizes') && isfield(P, 'imageCtrX') && isfield(P, 'imageCtrY')
+              imWidthDeg = randsample(P.imageSizes, 1);
+              imWidthPx = S.pixPerDeg * imWidthDeg;
+              imHeightPx = aspectRatio * imWidthPx;
+              
+              ctr = S.centerPix + [P.imageCtrX P.imageCtrY]*S.pixPerDeg;
+              o.ScreenRect = CenterRectOnPoint([0 0 imWidthPx imHeightPx], ctr(1), ctr(2));
+          end
     end
    
     function load_image_dir(o,imagedir)
@@ -61,72 +142,16 @@ classdef PR_BackImage < handle
    
     function generate_trialsList(o,S,P) %#ok<*INUSD>
            % nothing for this protocol
+
+           % This should randomize the order of image textures if not done
+           % in next_trial()
+           
     end
     
     function P = next_trial(o,S,P)
-            o.Flashtime = [];
-          %********************
-          o.S = S;
-          o.P = P;       
-          %*******************
-          flist = dir([o.ImageDirectory,filesep,'*.*']);
-          fext = cellfun(@(x) x(strfind(x, '.'):end), {flist.name}, 'uni', 0);
-          %for files with blah.blahblah.png etc
-          dotfiles=find(cellfun(@(x) contains(x(2:end),'.'), fext, 'uni', 1));
-          for ii=1:length(dotfiles)
-            fext{dotfiles(ii)}=fext{dotfiles(ii)}(strfind(fext{dotfiles(ii)}(2:end), '.')+1:end);
-          end
-
-          isimg = cellfun(@(x) any(strcmp(x, {'.bmp', '.png', '.jpg', '.jpeg', '.JPG', '.PNG'})), fext);
-          flist = flist(isimg);
-          
-          o.closeFunc();  % clear any remaining images in memory
-                          % before you allocated more (one per time)
-          
-          %******************
-          if (~isempty(flist))
-             fimo = 1 + floor( (rand * 0.99) * size(flist,1) );
-             fname = flist(fimo).name;  % name of an image
-             o.ImageFile = [o.ImageDirectory,filesep,fname];
-             o.imo = imread(o.ImageFile);
-             
-             % image can't be bigger than screen. Don't waste texture size?
-             [rows,cols,~]=size(o.imo);
-             if ~all([rows,cols]==S.screenRect([4 3]))
-                 [asp,rc]=min([rows,cols]./S.screenRect([4 3]));
-                 if rc==1 %crop cols
-                    ncols=round(S.screenRect([3])*asp);
-                    cut=(cols-ncols)/2;
-                    o.imo=o.imo(:,cut:end-cut,:);
-                 elseif rc==2 %crop rows
-                    nrows=round(S.screenRect([4])*asp);
-                    cut=(rows-nrows)/2;
-                    o.imo=o.imo(cut:end-cut,:,:);
-                 end
-                 o.imo = imresize(o.imo, S.screenRect([4 3]));
-             end
-
-             if o.grayscale
-                 o.imo = uint8(mean(o.imo,3));
-             end
-             %******* insert image in middle texture
-             o.ImoScreen = Screen('MakeTexture',o.winPtr,o.imo);
-             o.ImoRect = [0 0 size(o.imo,2) size(o.imo,1)];
-             o.ScreenRect = S.screenRect;
-          end
-          
-          aspectRatio = size(o.imo,1)./size(o.imo,2);
-          
-          % check if there are size and position variables
-          if isfield(P, 'imageSizes') && isfield(P, 'imageCtrX') && isfield(P, 'imageCtrY')
-              imWidthDeg = randsample(P.imageSizes, 1);
-              imWidthPx = S.pixPerDeg * imWidthDeg;
-              imHeightPx = aspectRatio * imWidthPx;
-              
-              ctr = S.centerPix + [P.imageCtrX P.imageCtrY]*S.pixPerDeg;
-              o.ScreenRect = CenterRectOnPoint([0 0 imWidthPx imHeightPx], ctr(1), ctr(2));
-          end
-          
+         o.texlist = randperm(o.P.nImages);
+          o.FrameCount = 0;
+          o.Flashtime = [];
     end
     
     function [FP,TS] = prep_run_trial(o)
@@ -141,17 +166,25 @@ classdef PR_BackImage < handle
         TS = [];  % no sensitive states in FaceCal
         %********
         o.startTime = GetSecs;
+
     end
     
     function keepgoing = continue_run_trial(o,screenTime)
         keepgoing = 0;
-        if (o.state < 1)
+        if (o.state < 4)
             keepgoing = 1;
         end
+        %******** this is also called post-screen flip, and thus
+        %******** can be used to time-stamp any previous graphics calls
+        %******** for object on the screen and things like that
+        if (o.FrameCount)
+           o.ImageHistory(o.FrameCount,1) = screenTime;  %store screen flip 
+        end
+
     end
    
     %******************** THIS IS THE BIG FUNCTION *************
-    function drop = state_and_screen_update(o,currentTime,x,y,varargin) 
+    function drop = state_and_screen_update(o,currentTime,x,y, varargin)
          outputs = {};
          if ~isempty(varargin)
              inputs=varargin{1};
@@ -159,25 +192,70 @@ classdef PR_BackImage < handle
                 outputs=varargin{2};
              end
          end 
-
         drop = 0;
+
         %******* THIS PART CHANGES WITH EACH PROTOCOL ****************
-        if o.state == 0 && currentTime > o.startTime + o.P.imageDur
-            o.state = 1; % Inter trial interval
+        if currentTime > o.startTime + o.P.trialDur
+            o.state = 4; % Inter trial interval
             o.imageOff = GetSecs;
             drop = 1; 
+            %return
         end
-        % GET THE DISPLAY READY FOR THE NEXT FLIP
-        % STATE SPECIFIC DRAWS
-        switch o.state
-           case 0
-            Screen('DrawTextures',o.winPtr,o.ImoScreen,o.ImoRect,o.ScreenRect)  
-        end 
+
+        % New states: 0 is nothing, 1 is stimuli on, 2 is isi, 4 is iti,
+        if o.state==0 %new trial, start on first image (relative to list) 
+            o.imagestart = currentTime;
+            o.tex=1;
+            o.state=1;
+        end
+
+        % Transition into isi
+        if o.state ==1 && (currentTime) > (o.imagestart + o.P.imageDur)% Update stimuli
+            o.imagestart=currentTime;
+            o.state=2;
+        end
+
+        % Transition out of isi
+        if o.state ==2 && (currentTime) > (o.imagestart+ o.P.isiDur)% Update stimuli
+            o.tex = o.tex+1;
+            o.tex=rem(o.tex-1,o.P.nImages)+1; %restart sequence if not enough images
+            o.imagestart=currentTime;
+            o.state=1;
+        end
+
+
+%            case 1
+        %disp(o.state)
+        if o.state==1 %images
+            if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                Screen('DrawTextures',o.winPtr,o.ImoScreen(o.texlist(o.tex)),o.ImoRect,o.ScreenRect)  % draw
+                Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                Screen('DrawTextures',o.winPtr,o.ImoScreen(o.texlist(o.tex)),o.ImoRect,o.ScreenRect)  % draw
+            else
+                Screen('DrawTextures',o.winPtr,o.ImoScreen(o.texlist(o.tex)),o.ImoRect,o.ScreenRect)        
+            end
+        elseif o.state ==2 %Isi
+            if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                Screen('FillRect',o.winPtr,o.S.bgColour);  % draw
+                Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                Screen('FillRect',o.winPtr,o.S.bgColour);  % draw
+            else
+                Screen('FillRect',o.winPtr,o.S.bgColour);       
+            end
+        end
+        
+        %Save image index relative to filelist
+        o.FrameCount = o.FrameCount + 1;
+        o.ImageHistory(o.FrameCount,2)=o.texlist(o.tex); 
+
+%         end 
         %**************************************************************
 
-        FrameEst=round((o.startTime-currentTime)*o.S.frameRate);
-        o.Flashtime = marmoview.updatePhotodiode(o.winPtr,o.S,outputs,FrameEst,currentTime,o.Flashtime);
 
+
+        o.Flashtime = marmoview.updatePhotodiode(o.winPtr,o.S,outputs,o.FrameCount,currentTime,o.Flashtime);
 
 
     end
@@ -191,8 +269,8 @@ classdef PR_BackImage < handle
         %***** but scale and show the images inside eyetrace panel
         eyeRad = handles.eyeTraceRadius;
         %***********
-        dx = size(o.imo,2)/(o.ScreenRect(3)-o.ScreenRect(1));
-        dy = size(o.imo,1)/(o.ScreenRect(4)-o.ScreenRect(2));
+        dx = size(o.imo{1},2)/(o.ScreenRect(3)-o.ScreenRect(1));
+        dy = size(o.imo{1},1)/(o.ScreenRect(4)-o.ScreenRect(2));
         %******* desired screen pixels to replicate
         dp = o.S.pixPerDeg * eyeRad;
         smax = floor(min((o.ScreenRect(4) - o.ScreenRect(2)),...
@@ -204,7 +282,7 @@ classdef PR_BackImage < handle
             eR = eyeRad;
         end        
         %******* covert to actual image pixels (not identical to screen)
-        cp = [floor(size(o.imo,2)/2), floor(size(o.imo,1)/2)];
+        cp = [floor(size(o.imo{1},2)/2), floor(size(o.imo{1},1)/2)];
         idx = floor( dp * dx );
         idy = floor( dp * dy );
         ix = ceil(cp(1)-idx):floor(cp(1)+idx);
@@ -215,8 +293,8 @@ classdef PR_BackImage < handle
         %*********** draw the scaled image, then overlay eye position
         subplot(handles.EyeTrace); hold off;
 %         H = imagesc(cix,ciy,flipud(o.imo(iy,ix,:)));
-        imagesc(cix,ciy,flipud(o.imo(iy,ix,:))); % don't output handle
-        if (size(o.imo,3)==1)
+        imagesc(cix,ciy,flipud(o.imo{1}(iy,ix,:))); % don't output handle
+        if (size(o.imo{1},3)==1)
             colormap('gray');
         end
         HH = gcf;
@@ -232,6 +310,9 @@ classdef PR_BackImage < handle
         PR.imageOff = o.imageOff;
         PR.imagefile = o.ImageFile;   % file name, if you want to load later
         PR.destRect = o.ScreenRect;
+        PR.lastimg = o.tex;
+        PR.texlist = o.texlist;
+        PR.ImageHistory = o.ImageHistory;
         PR.Flashtime = o.Flashtime;
     end
     

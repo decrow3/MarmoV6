@@ -1,4 +1,4 @@
-classdef dotspatialReplay < stimuli.stimulus
+classdef dotspatial_DomeRP < stimuli.stimulus
     %DOTSPATIALNOISE uses the dots class for spatiotemporal reverse
     %correlation
     %   Detailed explanation goes here
@@ -68,7 +68,7 @@ classdef dotspatialReplay < stimuli.stimulus
     end
 
     methods
-        function obj = dotspatialReplay(winPtr, varargin)
+        function obj = dotspatial_DomeRP(winPtr, varargin)
 
             obj = obj@stimuli.stimulus();
             obj.winPtr = winPtr;
