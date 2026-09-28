@@ -147,7 +147,11 @@ classdef FrameControl < matlab.mixin.Copyable & handle
 
         p.addParameter('showEye',0,@isfloat);
         p.addParameter('eyeIntensity',20,@isfloat); % default 
-        p.addParameter('Bkgd',127,@isfloat);
+        defaultBkgd = 127;
+        if isfield(S,'bgColour') && ~isempty(S.bgColour)
+            defaultBkgd = S.bgColour;
+        end
+        p.addParameter('Bkgd',defaultBkgd,@isfloat);
         p.addParameter('eyeRadius',2.0,@isfloat);
         
         p.parse(varargin{:});
@@ -161,9 +165,13 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         %******* if parameters are in the Pinit, use them 
         o.update_args_from_Pstruct(o.PInit);
         
-        % Color for gaze indicator color, % purple, replace later 
-        o.eyeColor = uint8(repmat(o.Bkgd,[1 3])) + ...
-                     uint8(o.eyeIntensity * [1,-1,1]);
+        % Color for gaze indicator color, % purple, replace later
+        backgroundRGB = o.Bkgd(:)';
+        if isscalar(backgroundRGB)
+            backgroundRGB = repmat(backgroundRGB,[1 3]);
+        end
+        o.eyeColor = uint8(min(255,max(0, ...
+            backgroundRGB + o.eyeIntensity*[1,-1,1])));
      end  
     
      function update_args_from_Pstruct(o,P)
@@ -173,8 +181,12 @@ classdef FrameControl < matlab.mixin.Copyable & handle
         end
         if (isfield(P,'eyeIntensity'))
           o.eyeIntensity = P.('eyeIntensity');
-          o.eyeColor = uint8(repmat(o.Bkgd,[1 3])) + ...
-                     uint8(o.eyeIntensity * [1,-1,1]);
+          backgroundRGB = o.Bkgd(:)';
+          if isscalar(backgroundRGB)
+              backgroundRGB = repmat(backgroundRGB,[1 3]);
+          end
+          o.eyeColor = uint8(min(255,max(0, ...
+              backgroundRGB + o.eyeIntensity*[1,-1,1])));
         end
         if (isfield(P,'Bkgd'))
           o.Bkgd = P.('Bkgd');

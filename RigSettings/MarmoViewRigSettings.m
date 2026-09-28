@@ -261,26 +261,37 @@ switch RigName
         S.inputs = {'eyetrack_dummy'};
         S.outputs = [];
         S.feedback = {'feedback_dummy'};%[];%{'feedback_dummy'};
-        S.DataPixx = true;
+        S.DataPixx = false;
 
-        S.monitor = 'Laptop';         % Monitor used for display window
-        S.screenNumber = 0;                 % Designates the display for task stimuli
-        S.frameRate = 60;                  % Frame rate of screen in Hz
-        S.screenRect = [0 0 960 540];     % Screen dimensions in pixels
-        S.screenWidth = 15;                 % Width of screen (cm)
-        S.centerPix =  [480 270];           % Pixels of center of the screen
+        % Dell P2419HC software-test configuration. The cone calibration is
+        % a P2419H spectral proxy with assumed gamma and is not experimental.
+        S.monitor = 'DELL_P2419HC';
+        S.screenNumber = max(Screen('Screens')); % Highest-index display, normally external Dell
+        S.frameRate = 60;
+        S.screenRect = [0 0 1920 1080];
+        S.screenWidth = 52.704;              % Active display width (cm)
+        S.centerPix = S.screenRect(3:4)/2;
         S.guiLocation = [1000 100 890 660];
-        S.bgColour = 127; % 186 if not gamma corrected
-
-        S.screenDistance = 14; %57;         % Distance of eye to screen (cm)
+        S.bgColour = [127.5 127.5 127.5];
+        S.gamma = [2.2 2.2 2.2];
+        S.inverseGamma = 1 ./ S.gamma;
+        S.screenDistance = 87;               % Viewing distance (cm)
         S.pixPerDeg = PixPerDeg(S.screenDistance,S.screenWidth,S.screenRect(3));
-        S.DummyScreen = true; % TODO: remove this parameter (it should be covered by screen Rect. Is it?)
-
-        S.gamma = 1;
-        S.screenDistance = 87;              % Distance of eye to screen (cm)
-        S.pixPerDeg = PixPerDeg(S.screenDistance,S.screenWidth,S.screenRect(3));
+        S.DummyScreen = false;
+        S.coneCalibrationFile = fullfile( ...
+            'C:\Users\Declan\Documents\2026','ConeColorMath', ...
+            'Dummy_DELL_P2419HC_proxy','exports', ...
+            'human_T_558_530_420','manifest.json');
+        S.coneCalibrationIsDummy = true;
+        S.coneCalibrationPurpose = 'SOFTWARE TESTING ONLY - NOT FOR EXPERIMENTS';
+        taskRoot = fileparts(fileparts(mfilename('fullpath')));
+        S.humanConeCalibrationFile = fullfile(taskRoot,'SupportData', ...
+            'ConeCalibration','HumanIsoluminantML', ...
+            'ConeMath2026_proxy_results.mat');
+        S.allowDummyHumanConeCalibration = true;
+        S.humanIsoluminanceAdjustment = 0;
         
-        S.eyetrack_dummy = true;
+        S.eyetrack_dummy = struct('ScreenNumber',S.screenNumber);
         S.feedback_dummy = [];
         
         

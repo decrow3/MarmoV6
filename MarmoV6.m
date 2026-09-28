@@ -160,10 +160,28 @@ classdef MarmoV6 < matlab.apps.AppBase
         
                 % Copy mfile as of time of running for worst case scenario recovery
                 % Cost is a few kB, per trial can grow large, so we want to do it once
-                fPR=fopen([app.taskPath filesep '+protocols' filesep 'PR_' app.S.protocol '.m']);
-                %D.PR_mfile=fread(fPR);
-                PR_mfile=fread(fPR);
-                fclose(fPR);
+                protocolFile = '';
+                if isfield(app.S,'protocol_class') && ...
+                        ~isempty(app.S.protocol_class)
+                    protocolFile = which(char(app.S.protocol_class));
+                end
+                if isempty(protocolFile)
+                    % Compatibility fallback for older settings files that
+                    % only provide S.protocol.
+                    protocolFile = fullfile(app.taskPath,'+protocols', ...
+                        ['PR_' char(app.S.protocol) '.m']);
+                end
+
+                fPR = fopen(protocolFile,'rb');
+                if fPR == -1
+                    warning('MarmoV6:ProtocolSourceUnavailable', ...
+                        ['Could not read protocol source file "%s". Data will ' ...
+                        'still be condensed without embedded source.'],protocolFile);
+                    PR_mfile = uint8([]);
+                else
+                    PR_mfile = fread(fPR);
+                    fclose(fPR);
+                end
         
         
                 %cd(app.outputPath);             % goto output directory

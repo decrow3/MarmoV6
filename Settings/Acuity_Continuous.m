@@ -24,7 +24,7 @@ S.protocol_class = ['protocols.PR_',S.protocol];
 
 % Define Banner text to identify the experimental protocol
 % recommend maximum of ~28 characters
-S.protocolTitle = 'Continuous Gabor Track Task';
+S.protocolTitle = 'Continuous Acuity Track Task';
 
 %******** Don't allow in trial calibration for this one (comment out)
 % P.InTrialCalib = 1;
@@ -48,11 +48,11 @@ S.rewardNumber = 'Number of juice pulses to deliver:';
 P.ecc = 5;  % eccentricity of grating for detection
 S.ecc = 'Grating eccentricity (dva):';
 P.cpd = 4;
-S.cpd = 'Cycles per degree:';
+S.cpd = 'Grating cpd / legacy dot inverse-size index:';
 P.minFreq = 11; %4;
-S.minFreq = 'Min spf to test';
+S.minFreq = 'Min nominal inverse-size condition:';
 P.maxFreq = 19; %12;
-S.maxFreq = 'Max spf to test';
+S.maxFreq = 'Max nominal inverse-size condition:';
 P.FreqNum = 6;
 S.FreqNum = 'Numb of freqs:';
 P.apertures = 4;
@@ -77,6 +77,20 @@ P.mode = 1;
 S.mode = '0 - sine wave, 1 - optic flow';
 P.centerDecayProfile = 1;
 S.centerDecayProfile = 'Optic flow center cull: 0-off, 1-Laser, 2-TDM';
+P.nDots = 2500;
+S.nDots = 'Number of optic-flow dots:';
+P.balancedDots = 1;
+S.balancedDots = 'Balanced light/dark dots? (0 or 1):';
+P.dotContrast = 1;
+S.dotContrast = 'Contrast at the smallest dot size (0-1):';
+P.normalizeDotRms = 1;
+S.normalizeDotRms = 'Normalize expected RMS across dot sizes? (0 or 1):';
+P.dotRmsExponent = 1;
+S.dotRmsExponent = 'Dot-size exponent for RMS normalization:';
+P.dotMinSeparation = 0.75;
+S.dotMinSeparation = 'Min separation among like-polarity dots (deg):';
+P.dotPlacementAttempts = 50;
+S.dotPlacementAttempts = 'Attempts per minimum-distance dot placement:';
 
 % Gaze indicator
 P.eyeRadius = 2.5; 
@@ -142,7 +156,7 @@ S.stimHold = 'Duration to hold fix after grating onset (s):';
 P.noresponseDur = 1.5;
 S.noresponseDur = 'Duration to count error if no response(s):';
 P.lostgrace = 0.1;
-S.noresponseDur = 'Duration of grace period for losing the track (s)';
+S.lostgrace = 'Duration of grace period for losing the track (s)';
 P.RewardDur = 1;
 S.RewardDur = 'Duration following stim to get a reward (s)';
 

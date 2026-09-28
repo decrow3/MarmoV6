@@ -30,6 +30,23 @@ classdef opticflow < stimuli.stimulus
     screenRect = [];   % if radius Inf, then fill whole area
     colour = [1 1 1];
     bkgd double = 127;  
+    balancedDots logical = false; % equal light/dark dot counts around bkgd
+    dotContrast double = 1; % symmetric contrast in the display's 0-255 range
+    dotPolarity double = []; % -1 dark, 0 background, +1 light
+    dotColours double = []; % precomputed Screen DrawDots colour matrix
+    polarityColours double = []; % 3x2 RGB columns: negative, positive endpoint
+    neutralColour double = []; % 3x1 RGB neutral point for zero-polarity dots
+    cachedReplacementX double = [];
+    cachedReplacementY double = [];
+    trialPlacementReady logical = false;
+    cachedReplacementCount double = 0;
+    minSeparationPix double = 0; % minimum spacing among like-polarity dots
+    placementAttempts double = 50; % rejection samples before best-candidate fallback
+    placementFallbackCount double = 0; % placements that missed requested spacing
+    placementCandidateCount double = 0; % candidates evaluated this trial
+    placementDistanceChecks double = 0; % local neighbor distances evaluated
+    placementTimeSeconds double = 0; % CPU time spent placing dots
+    placementCalls double = 0;
     % could add an aperture radius, for now fullscreen 
     maxRadius double; % maximum radius (pixels), default to Inf
     Xtop double; % max X (pixels) screenRect(3)
@@ -97,6 +114,12 @@ classdef opticflow < stimuli.stimulus
     p.addParameter('centerDecay',o.centerDecay, @(x) islogical(x) || isnumeric(x));
     p.addParameter('centerDecayRadii',o.centerDecayRadii, isfloat);
     p.addParameter('centerDecaySteps',o.centerDecaySteps, isfloat);
+    p.addParameter('balancedDots',o.balancedDots, @(x) islogical(x) || isnumeric(x));
+    p.addParameter('dotContrast',o.dotContrast, isfloat);
+    p.addParameter('polarityColours',o.polarityColours, isfloat);
+    p.addParameter('neutralColour',o.neutralColour, isfloat);
+    p.addParameter('minSeparationPix',o.minSeparationPix, isfloat);
+    p.addParameter('placementAttempts',o.placementAttempts, isfloat);
 
 
       try
@@ -111,6 +134,7 @@ classdef opticflow < stimuli.stimulus
       o.position = args.position;
       o.f = args.f;
       o.depth = args.depth;
+      o.dotdepth = args.dotdepth;
       o.size = args.size;
       o.vxyz = args.vxyz;
       o.nDots = args.nDots;
@@ -125,16 +149,75 @@ classdef opticflow < stimuli.stimulus
       o.centerDecay = logical(args.centerDecay);
       o.centerDecayRadii = args.centerDecayRadii;
       o.centerDecaySteps = args.centerDecaySteps;
+      o.balancedDots = logical(args.balancedDots);
+      o.dotContrast = args.dotContrast;
+      o.polarityColours = args.polarityColours;
+      o.neutralColour = args.neutralColour;
+      o.minSeparationPix = max(0,args.minSeparationPix);
+      o.placementAttempts = max(1,round(args.placementAttempts));
 
     end
     
 
     function beforeTrial(o)
-     
+      o.placementFallbackCount = 0;
+      o.placementCandidateCount = 0;
+      o.placementDistanceChecks = 0;
+      o.placementTimeSeconds = 0;
+      o.placementCalls = 0;
+      o.cachedReplacementCount = 0;
+      o.trialPlacementReady = false;
+      o.cachedReplacementX = [];
+      o.cachedReplacementY = [];
       o.fs = repmat(-o.f,o.nDots,1);
       o.zs = zeros(o.nDots, 1);
- 
-      o.initDots([1:o.nDots]); % all dots!
+
+      if o.balancedDots
+        nPairs = floor(o.nDots/2);
+        o.dotPolarity = [ones(nPairs,1); -ones(nPairs,1); ...
+          zeros(o.nDots - 2*nPairs,1)];
+        o.dotPolarity = o.dotPolarity(randperm(o.rng,o.nDots));
+        contrast = min(max(o.dotContrast,0),1);
+        if ~isempty(o.polarityColours)
+          if ~isequal(size(o.polarityColours),[3 2]) || ...
+                  any(~isfinite(o.polarityColours(:))) || ...
+                  any(o.polarityColours(:) < 0) || ...
+                  any(o.polarityColours(:) > 255)
+            error('opticflow:PolarityColours', ...
+              'polarityColours must be a finite 3x2 RGB matrix in [0,255].');
+          end
+          if isempty(o.neutralColour)
+            neutral = mean(o.polarityColours,2);
+          else
+            neutral = o.neutralColour(:);
+          end
+          if numel(neutral) ~= 3 || any(~isfinite(neutral)) || ...
+                  any(neutral < 0) || any(neutral > 255)
+            error('opticflow:NeutralColour', ...
+              'neutralColour must contain three finite RGB values in [0,255].');
+          end
+          endpoints = neutral + contrast*(o.polarityColours-neutral);
+          o.dotColours = repmat(neutral,1,o.nDots);
+          o.dotColours(:,o.dotPolarity < 0) = repmat(endpoints(:,1),1,nnz(o.dotPolarity < 0));
+          o.dotColours(:,o.dotPolarity > 0) = repmat(endpoints(:,2),1,nnz(o.dotPolarity > 0));
+        else
+          maxDelta = min(o.bkgd,255-o.bkgd);
+          dotLevels = o.bkgd + contrast*maxDelta*o.dotPolarity;
+          o.dotColours = repmat(dotLevels(:).',3,1);
+        end
+      else
+        o.dotPolarity = [];
+        o.dotColours = o.colour;
+      end
+
+      % Polarity is assigned first so minimum-distance sampling can suppress
+      % same-sign clusters while leaving opposite signs independent.
+      o.initDots(1:o.nDots);
+      if o.minSeparationPix > 0
+          o.cachedReplacementX = o.x;
+          o.cachedReplacementY = o.y;
+          o.trialPlacementReady = true;
+      end
 
       % initialise dots' lifetime
       if o.lifetime ~= Inf
@@ -178,26 +261,21 @@ classdef opticflow < stimuli.stimulus
       
       o.frameCnt(idx) = o.lifetime; % default: Inf
       
-      if isinf(o.maxRadius)
-          x_=o.position(1);
-          y_=o.position(2);
-          %Redraw any that start too close to the center
-          while sum(hypot(x_-o.position(1), y_-o.position(2)) < 2.5*o.size)>0
-              x_ = (rand(o.rng, n,1) * (o.Xtop - o.Xbot)) + o.Xbot;
-              y_ = (rand(o.rng, n,1) * (o.Ytop - o.Ybot)) + o.Ybot; %counting from top
-          end
-          o.x(idx,1) = x_;
-          o.y(idx,1) = y_;
+      if o.trialPlacementReady && o.minSeparationPix > 0 && ...
+              numel(o.cachedReplacementX) == o.nDots
+          % Recycle the pre-trial minimum-distance layout. No spatial-grid
+          % construction or rejection sampling occurs during presentation.
+          x_ = o.cachedReplacementX(idx);
+          y_ = o.cachedReplacementY(idx);
+          o.cachedReplacementCount = o.cachedReplacementCount + numel(idx);
       else
-          % dot positions (polar coordinates, r and theta) - store this?
-          r = sqrt(rand(o.rng, n,1).*o.maxRadius.*o.maxRadius); % pixels
-          th = rand(o.rng, n,1).*360.0; % deg.
-
-          % convert r and theta to x and y
-          [x_,y_] = pol2cart(th.*(pi/180.0),r);
-          o.x(idx,1) = x_;
-          o.y(idx,1) = y_;
+          placementTimer = tic;
+          [x_,y_] = o.samplePositions(idx);
+          o.placementTimeSeconds = o.placementTimeSeconds + toc(placementTimer);
+          o.placementCalls = o.placementCalls + 1;
       end
+      o.x(idx,1) = x_;
+      o.y(idx,1) = y_;
       
       o.z = o.dotdepth + o.depth;
 
@@ -212,6 +290,166 @@ classdef opticflow < stimuli.stimulus
         o.dy = Ay*o.vxyz'./o.z;
       
     end
+
+    function [xNew,yNew] = samplePositions(o,idx)
+      % Sequential minimum-distance sampling. In balanced mode the spacing
+      % constraint is polarity-specific, suppressing light-only and
+      % dark-only clusters without forcing light/dark dipoles.
+      n = numel(idx);
+      xNew = nan(n,1);
+      yNew = nan(n,1);
+
+      if o.minSeparationPix <= 0
+          [xNew,yNew] = o.randomPositions(n);
+          return
+      end
+
+      existingMask = true(o.nDots,1);
+      existingMask(idx) = false;
+      if numel(o.x) < o.nDots
+          existingX = zeros(0,1);
+          existingY = zeros(0,1);
+          existingPolarity = zeros(0,1);
+      else
+          existingMask = existingMask & isfinite(o.x(:)) & isfinite(o.y(:));
+          existingX = o.x(existingMask);
+          existingY = o.y(existingMask);
+          if o.balancedDots
+              existingPolarity = o.dotPolarity(existingMask);
+          else
+              existingPolarity = ones(nnz(existingMask),1);
+          end
+      end
+
+      minDistanceSquared = o.minSeparationPix.^2;
+      cellSize = o.minSeparationPix;
+      if isinf(o.maxRadius)
+          xMin = o.Xbot;
+          xMax = o.Xtop;
+          yMin = o.Ytop;
+          yMax = o.Ybot;
+      else
+          xMin = -o.maxRadius;
+          xMax = o.maxRadius;
+          yMin = -o.maxRadius;
+          yMax = o.maxRadius;
+      end
+      nCols = max(1,ceil((xMax-xMin)/cellSize));
+      nRows = max(1,ceil((yMax-yMin)/cellSize));
+      nCells = nCols*nRows;
+      buckets = cell(3*nCells,1);
+      existingGroup = o.polarityGroup(existingPolarity);
+      for kk = 1:numel(existingX)
+          column = min(nCols,max(1,floor((existingX(kk)-xMin)/cellSize)+1));
+          row = min(nRows,max(1,floor((existingY(kk)-yMin)/cellSize)+1));
+          cellIndex = row + (column-1)*nRows + (existingGroup(kk)-1)*nCells;
+          buckets{cellIndex}(end+1) = kk;
+      end
+
+      for ii = 1:n
+          dotIndex = idx(ii);
+          if o.balancedDots
+              polarity = o.dotPolarity(dotIndex);
+          else
+              polarity = 1;
+          end
+          group = o.polarityGroup(polarity);
+          bestDistanceSquared = -Inf;
+          bestX = NaN;
+          bestY = NaN;
+          accepted = false;
+
+          for attempt = 1:o.placementAttempts
+              o.placementCandidateCount = o.placementCandidateCount + 1;
+              [candidateX,candidateY] = o.randomPosition();
+              if isinf(o.maxRadius) && ...
+                      hypot(candidateX-o.position(1),candidateY-o.position(2)) < 2.5*o.size
+                  continue
+              end
+              column = min(nCols,max(1,floor((candidateX-xMin)/cellSize)+1));
+              row = min(nRows,max(1,floor((candidateY-yMin)/cellSize)+1));
+              neighborIndices = [];
+              for neighborColumn = max(1,column-1):min(nCols,column+1)
+                  for neighborRow = max(1,row-1):min(nRows,row+1)
+                      cellIndex = neighborRow + (neighborColumn-1)*nRows + ...
+                          (group-1)*nCells;
+                      neighborIndices = [neighborIndices buckets{cellIndex}]; %#ok<AGROW>
+                  end
+              end
+              o.placementDistanceChecks = o.placementDistanceChecks + ...
+                  numel(neighborIndices);
+              if ~isempty(neighborIndices)
+                  nearestSquared = min((existingX(neighborIndices)-candidateX).^2 + ...
+                      (existingY(neighborIndices)-candidateY).^2);
+              else
+                  nearestSquared = Inf;
+              end
+              if nearestSquared > bestDistanceSquared
+                  bestDistanceSquared = nearestSquared;
+                  bestX = candidateX;
+                  bestY = candidateY;
+              end
+              if nearestSquared >= minDistanceSquared
+                  accepted = true;
+                  break
+              end
+          end
+
+          if ~accepted
+              o.placementFallbackCount = o.placementFallbackCount + 1;
+          end
+          while ~isfinite(bestX) || ~isfinite(bestY)
+              [bestX,bestY] = o.randomPosition();
+              if ~isinf(o.maxRadius) || ...
+                      hypot(bestX-o.position(1),bestY-o.position(2)) >= 2.5*o.size
+                  break
+              end
+          end
+          xNew(ii) = bestX;
+          yNew(ii) = bestY;
+          existingX(end+1,1) = bestX;
+          existingY(end+1,1) = bestY;
+          existingPolarity(end+1,1) = polarity;
+          cellIndex = min(nRows,max(1,floor((bestY-yMin)/cellSize)+1)) + ...
+              (min(nCols,max(1,floor((bestX-xMin)/cellSize)+1))-1)*nRows + ...
+              (group-1)*nCells;
+          buckets{cellIndex}(end+1) = numel(existingX);
+      end
+    end
+
+    function [x,y] = randomPositions(o,n)
+      if isinf(o.maxRadius)
+          x = rand(o.rng,n,1)*(o.Xtop-o.Xbot) + o.Xbot;
+          y = rand(o.rng,n,1)*(o.Ytop-o.Ybot) + o.Ybot;
+          invalid = hypot(x-o.position(1),y-o.position(2)) < 2.5*o.size;
+          while any(invalid)
+              count = nnz(invalid);
+              x(invalid) = rand(o.rng,count,1)*(o.Xtop-o.Xbot) + o.Xbot;
+              y(invalid) = rand(o.rng,count,1)*(o.Ytop-o.Ybot) + o.Ybot;
+              invalid = hypot(x-o.position(1),y-o.position(2)) < 2.5*o.size;
+          end
+      else
+          radius = sqrt(rand(o.rng,n,1))*o.maxRadius;
+          theta = rand(o.rng,n,1)*2*pi;
+          [x,y] = pol2cart(theta,radius);
+      end
+    end
+
+    function [x,y] = randomPosition(o)
+      if isinf(o.maxRadius)
+          x = rand(o.rng)*(o.Xtop-o.Xbot) + o.Xbot;
+          y = rand(o.rng)*(o.Ytop-o.Ybot) + o.Ybot;
+      else
+          radius = sqrt(rand(o.rng))*o.maxRadius;
+          theta = rand(o.rng)*2*pi;
+          [x,y] = pol2cart(theta,radius);
+      end
+    end
+
+    function group = polarityGroup(~,polarity)
+      group = round(polarity) + 2;
+      group = min(3,max(1,group));
+    end
                 
     function moveDots(o)
 
@@ -219,6 +457,7 @@ classdef opticflow < stimuli.stimulus
       x_ = o.x + o.dx;
       y_ = o.y + o.dy;
 
+      replaceIdx = [];
       if isinf(o.maxRadius)
           o.x = x_;
           o.y = y_;
@@ -244,11 +483,11 @@ classdef opticflow < stimuli.stimulus
                    indclose = find(centerDist < radii(ii)*o.size);
                    indcloseall = [indcloseall; indclose(1:steps(ii):end)];
                end
-               o.initDots(union(find(iireplace),unique(indcloseall)));
+               replaceIdx = union(find(iireplace),unique(indcloseall));
            else
                tooclose = centerDist < radii(1)*o.size;
                indclose1 = find(tooclose);
-               o.initDots(union(find(iireplace),indclose1));
+               replaceIdx = union(find(iireplace),indclose1);
            end
 
           %***********
@@ -258,21 +497,20 @@ classdef opticflow < stimuli.stimulus
 
          r = sqrt(x_.^2 + y_.^2);
          iireplace = find(r > o.maxRadius); % dots that have exited the aperture  
-         o.initDots(iireplace);
+         replaceIdx = iireplace;
 
       end
       
-      idx = find(o.frameCnt == 0); % dots that have exceeded their lifetime
-      if ~isempty(idx)
-        % (re-)place dots randomly within the aperture
-        o.initDots(idx);
+      expiredIdx = find(o.frameCnt <= 0); % dots that exceeded their lifetime
+      replaceIdx = union(replaceIdx,expiredIdx);
+      if ~isempty(replaceIdx)
+        % Rebuild the spatial grid only once for all replacements this frame.
+        o.initDots(replaceIdx);
       end
 
     end
     
     function drawDots(o)
-      dotColour = o.colour; %zeros([1,3]); %repmat(0,1,3);
-      
       % dotType:
       %
       %   0 - square dots (default)
@@ -281,15 +519,15 @@ classdef opticflow < stimuli.stimulus
       %   3 - round, anti-aliased dots (built-in shader)
       %   4 - square dots (built-in shader)
       dotType = 1;
-      
 
-        colmat = dotColour';
-
-%         Screen('DrawDots',o.winPtr,[o.x(:), -1*o.y(:)]', o.size, colmat', o.position, dotType);
-
-        % Place dots in screen coordinates, left and down from top left
-        % corner, do positional math elsewhere
-        Screen('DrawDots',o.winPtr,[o.x(:), o.y(:)]', o.size, colmat', [0,0], dotType);
+      % One batched draw call keeps the online rendering cost closest to
+      % the legacy implementation. The colour matrix is built before trial.
+      drawColours = o.dotColours;
+      if size(drawColours,1) == 3
+          drawColours = [drawColours;255*ones(1,size(drawColours,2))];
+      end
+      Screen('DrawDots',o.winPtr,[o.x(:),o.y(:)]',o.size, ...
+          drawColours,[0,0],dotType);
 
     end
 

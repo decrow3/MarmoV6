@@ -25,7 +25,7 @@ classdef PR_Acuity_Continuous < handle
        ProbeHistory =[]
        Traces =[]
        targWinRadius double = 5;
-       FrameCount double = 1;
+       FrameCount double = 0;
        mode double =1;
   end
       
@@ -112,8 +112,7 @@ classdef PR_Acuity_Continuous < handle
            % nothing for this protocol
            
            % Spatial frequency sampling
-           lx = log(P.minFreq):((log(P.maxFreq)-log(P.minFreq))/P.FreqNum):log(P.maxFreq);
-           sf_sampling =  exp(lx); % [2 4 6 8 10 12]; 
+           sf_sampling = logspace(log10(P.minFreq),log10(P.maxFreq),P.FreqNum);
 
             % Generate trials list
             o.trialsList = [];
@@ -145,7 +144,7 @@ classdef PR_Acuity_Continuous < handle
 
          %******* init Noise History with MaxDuration **************
 
-          if P.runType == 1   % go through trials list    
+          if P.runType == 1   % go through trials list
                 i = o.trialIndexer.getNextTrial(o.error);
                 %****** update trial parameters for next trial
                 P.choiceX = o.trialsList(i,1);
@@ -156,32 +155,21 @@ classdef PR_Acuity_Continuous < handle
                 P.phase = o.trialsList(i,4);
                 P.orientation = o.trialsList(i,5);
                 P.rewardNumber = o.trialsList(i,6);
-             
-
-
-          % Generate a continous series of x, y target postions from white
-          % gaussian velocities
-            % Save random seed here? Already saved in P.rngbeforetrial
-            vx=randn(1, o.MaxFrame-1).*o.P.speed./S.frameRate; %speed deg/s, rate frames/sec to deg/frame
-            vy=randn(1, o.MaxFrame-1).*o.P.speed./S.frameRate;
-            posx=zeros(1,o.MaxFrame);
-            posy=zeros(1,o.MaxFrame);
-            for ii=2:o.MaxFrame
-                posx(ii)=posx(ii-1)+vx(ii-1);
-                posy(ii)=posy(ii-1)+vy(ii-1);
-            end
-
-            P.targxvect=posx;
-            P.targyvect=posy;
-
-            % Clear any previous traces (already stored in PR)
-            o.ProbeHistory = zeros(o.MaxFrame,5);  % time,x,y,sf,fixated
-            o.Traces = zeros(o.MaxFrame,6);  % time,targx,targy,eyex,eyey, fixgood
-
-               %******************
-                o.P = P;  % set to most current
-
           end
+
+          % Generate a continuous series of x/y target positions from
+          % Gaussian white-noise velocities for every run type.
+          o.MaxFrame = ceil(max(20,P.stimDur + 1)*S.frameRate);
+          vx = randn(1,o.MaxFrame-1).*P.speed./S.frameRate;
+          vy = randn(1,o.MaxFrame-1).*P.speed./S.frameRate;
+          P.targxvect = [0 cumsum(vx)];
+          P.targyvect = [0 cumsum(vy)];
+
+          % Clear traces from the preceding trial.
+          o.ProbeHistory = zeros(o.MaxFrame,5);
+          o.Traces = zeros(o.MaxFrame,6);
+          o.targWinRadius = P.targWinRadius;
+          o.P = P;
           
           % Calculate this for pie slice windowing for choice
           o.stimTheta = atan2(P.choiceY,P.choiceX);
@@ -204,14 +192,63 @@ classdef PR_Acuity_Continuous < handle
                   o.hProbe(1).position = [(S.centerPix(1) + round(P.xDeg*S.pixPerDeg)),(S.centerPix(2) - round(P.yDeg*S.pixPerDeg))];
                     o.hProbe(1).f= 0.100; %0.01
                     o.hProbe(1).depth= 10; %2
-                    o.hProbe(1).size= (S.pixPerDeg/P.cpd)/2; %half a cycle (in pixels)
+                    % DrawDots size is diameter; map it to half a nominal cycle.
+                    % Clamp to the point-size range reported by this GPU. The
+                    % requested and rendered sizes are both saved with the trial.
+                    requestedDotDiameterPix = (S.pixPerDeg/P.cpd)/2;
+                    [minSmoothPointSize,maxSmoothPointSize] = ...
+                        Screen('DrawDots',o.winPtr);
+                    o.hProbe(1).size = min(max(requestedDotDiameterPix, ...
+                        minSmoothPointSize),maxSmoothPointSize);
                     o.hProbe(1).vxyz= [0 0 -.1];
-                    o.hProbe(1).nDots= 2500;
+                    if isfield(P,'nDots')
+                        o.hProbe(1).nDots = max(1,round(P.nDots));
+                    else
+                        o.hProbe(1).nDots = 2500;
+                    end
                     o.hProbe(1).transparent= 0.5000;
                     o.hProbe(1).pixperdeg= S.pixPerDeg;
                     o.hProbe(1).screenRect= S.screenRect;
                     o.hProbe(1).colour= [1 1 1];
-                    o.hProbe(1).bkgd= 127;
+                    o.hProbe(1).bkgd = P.bkgd;
+                    if isfield(P,'balancedDots')
+                        o.hProbe(1).balancedDots = logical(P.balancedDots);
+                    end
+                    if isfield(P,'dotContrast')
+                        effectiveContrast = P.dotContrast;
+                        if isfield(P,'normalizeDotRms') && logical(P.normalizeDotRms)
+                            rmsExponent = 1;
+                            if isfield(P,'dotRmsExponent')
+                                rmsExponent = P.dotRmsExponent;
+                            end
+                            referenceCpd = max(P.minFreq,P.maxFreq);
+                            effectiveContrast = effectiveContrast* ...
+                                (P.cpd/referenceCpd).^rmsExponent;
+                        end
+                        o.hProbe(1).dotContrast = min(max(effectiveContrast,0),1);
+                    end
+                    if isfield(S,'coneColor')
+                        if isfield(S.coneColor,'RequiresUnitDotContrast') && ...
+                                logical(S.coneColor.RequiresUnitDotContrast) && ...
+                                abs(o.hProbe(1).dotContrast-1) > 1e-12
+                            error('PR_Acuity_Continuous:CalibratedContrast', ...
+                                ['This calibrated stimulus requires dotContrast=1. ' ...
+                                'Regenerate calibrated endpoints to change contrast.']);
+                        end
+                        o.hProbe(1).polarityColours = [ ...
+                            S.coneColor.NegativeRGB255(:), ...
+                            S.coneColor.PositiveRGB255(:)];
+                        o.hProbe(1).neutralColour = ...
+                            S.coneColor.BackgroundRGB255(:);
+                    end
+                    if isfield(P,'dotMinSeparation')
+                        o.hProbe(1).minSeparationPix = ...
+                            max(0,P.dotMinSeparation)*S.pixPerDeg;
+                    end
+                    if isfield(P,'dotPlacementAttempts')
+                        o.hProbe(1).placementAttempts = ...
+                            max(1,round(P.dotPlacementAttempts));
+                    end
                     o.hProbe(1).maxRadius= inf;
                     o.hProbe(1).lifetime= 30;
                     if isfield(P,'centerDecayProfile')
@@ -245,7 +282,7 @@ classdef PR_Acuity_Continuous < handle
           o.flashCounter = 0;
           % rewardCount counts the number of juice pulses, 1 delivered per frame
           o.rewardCount = 0;
-          o.FrameCount =1;
+          o.FrameCount = 0;
           %****** deliver sound on fix breaks
           o.RunFixBreakSound =0;
           o.NeverBreakSoundTwice = 0;  
@@ -270,7 +307,9 @@ classdef PR_Acuity_Continuous < handle
     end
     
     function keepgoing = continue_run_trial(o,screenTime)
-        o.ProbeHistory(o.FrameCount,1)=screenTime;
+        if o.FrameCount > 0
+            o.ProbeHistory(o.FrameCount,1) = screenTime;
+        end
         keepgoing = 0;
         if (o.state < 9)
             keepgoing = 1;
@@ -339,20 +378,20 @@ classdef PR_Acuity_Continuous < handle
                 %%%% end if moves too far from the target
         targx=(o.hProbe.position(1)-o.S.centerPix(1))/o.S.pixPerDeg;
         targy=-(o.hProbe.position(2)-o.S.centerPix(2))/o.S.pixPerDeg;
-        dist=(x-targx).^2+(y-targy).^2;
-       
-        if ((o.state == 3) || (o.state == 4)) && dist < o.P.targWinRadius
+        distSquared = (x-targx).^2 + (y-targy).^2;
+
+        if ((o.state == 3) || (o.state == 4)) && distSquared <= o.P.targWinRadius.^2
             o.state = 3; % stay in/reenter state
             %Reward if followed stim for 1 second
-            if ~o.error && o.rewardCount < o.P.rewardNumber && (currentTime-o.lastReward)>o.RewardDur
+            if ~o.error && o.rewardCount < o.P.rewardNumber && (currentTime-o.lastReward)>o.P.RewardDur
                    o.rewardCount = o.rewardCount + 1;
                    drop = 1;
                    o.lastReward=GetSecs;
             end
-            
-        elseif ((o.state == 3) || (o.state == 4)) && dist > o.P.targWinRadius
+
+        elseif o.state == 3 && distSquared > o.P.targWinRadius.^2
             o.state = 4; %enter grace period for lost target
-            o.lostStart = GetSecs;
+            o.lostStart = currentTime;
         end
 
         % Target is lost, and has continued to be lost (otherwise it would
@@ -501,14 +540,15 @@ classdef PR_Acuity_Continuous < handle
         plot(h,r*cos(0:.01:1*2*pi),r*sin(0:.01:1*2*pi),'--k');
         set(h,'NextPlot','Add');
         
-        targX =o.Traces(:,2);
-        targY =o.Traces(:,3);
-        eyeX =o.Traces(:,4);
-        eyeY =o.Traces(:,5);
+        trialTraces = o.Traces(1:o.FrameCount,:);
+        targX = trialTraces(:,2);
+        targY = trialTraces(:,3);
+        eyeX = trialTraces(:,4);
+        eyeY = trialTraces(:,5);
 
         plot(h,targX,targY,'k.')
-        plot(h,eyeX(o.Traces(:,6)==1),eyeY(o.Traces(:,6)==1),'b.')
-        plot(h,eyeX(o.Traces(:,6)~=1),eyeY(o.Traces(:,6)~=1),'r.')
+        plot(h,eyeX(trialTraces(:,6)==1),eyeY(trialTraces(:,6)==1),'b.')
+        plot(h,eyeX(trialTraces(:,6)~=1),eyeY(trialTraces(:,6)~=1),'r.')
 
 
 
@@ -544,7 +584,125 @@ classdef PR_Acuity_Continuous < handle
         PR.y = P.yDeg;
         PR.choiceX = P.choiceX;
         PR.choiceY = P.choiceY;
+        % Retain cpd for backward compatibility, but treat dot diameter as
+        % the physical independent variable for optic-flow trials.
         PR.cpd = P.cpd;
+        PR.nominalCpd = P.cpd;
+        if P.mode == 1
+            PR.requestedDotDiameterPix = (o.S.pixPerDeg/P.cpd)/2;
+            PR.dotDiameterPix = o.hProbe.size;
+            PR.dotDiameterDeg = o.hProbe.size/o.S.pixPerDeg;
+            PR.dotDiameterWasClamped = abs(PR.dotDiameterPix - ...
+                PR.requestedDotDiameterPix) > 10*eps(PR.dotDiameterPix);
+            PR.effectiveDotCpd = o.S.pixPerDeg/(2*PR.dotDiameterPix);
+            PR.conditionValue = PR.dotDiameterDeg;
+            PR.conditionUnits = 'deg dot diameter';
+            PR.nDots = o.hProbe.nDots;
+            PR.balancedDots = o.hProbe.balancedDots;
+            PR.dotContrast = o.hProbe.dotContrast;
+            if isfield(P,'dotContrast')
+                PR.dotContrastAtSmallestSize = P.dotContrast;
+            end
+            if isfield(P,'normalizeDotRms')
+                PR.normalizeDotRms = logical(P.normalizeDotRms);
+            end
+            if isfield(P,'dotRmsExponent')
+                PR.dotRmsExponent = P.dotRmsExponent;
+            end
+            PR.dotMinSeparationDeg = o.hProbe.minSeparationPix/o.S.pixPerDeg;
+            PR.dotPlacementFallbacks = o.hProbe.placementFallbackCount;
+            PR.dotPlacementCalls = o.hProbe.placementCalls;
+            PR.dotPlacementCandidates = o.hProbe.placementCandidateCount;
+            PR.dotPlacementDistanceChecks = o.hProbe.placementDistanceChecks;
+            PR.dotPlacementTimeMs = 1000*o.hProbe.placementTimeSeconds;
+            PR.dotCachedReplacementCount = o.hProbe.cachedReplacementCount;
+            PR.dotReplacementMode = 'cached pre-trial layout';
+            PR.stimulusFamily = 'broadband polarity-balanced dots';
+            if isfield(o.S,'coneColor')
+                PR.stimulusFamily = 'human cone-opponent balanced dots';
+                PR.coneAxisLabel = o.S.coneAxisLabel;
+                PR.conePeaksNm = o.S.coneColor.ConePeaks;
+                PR.coneAxis = o.S.coneColor.ConeAxis;
+                PR.coneAxisAmplitude = o.S.coneColor.AxisAmplitude;
+                PR.maximumSymmetricConeAxisAmplitude = ...
+                    o.S.coneColor.MaximumSymmetricAxisAmplitude;
+                PR.neutralLinearRGB = o.S.coneColor.BackgroundLinearRGB;
+                PR.negativeLinearRGB = o.S.coneColor.NegativeLinearRGB;
+                PR.positiveLinearRGB = o.S.coneColor.PositiveLinearRGB;
+                PR.negativeConeContrast = o.S.coneColor.NegativeConeContrast;
+                PR.positiveConeContrast = o.S.coneColor.PositiveConeContrast;
+                PR.presentedNegativeLinearRGB = ...
+                    o.S.coneColor.BackgroundLinearRGB + o.hProbe.dotContrast* ...
+                    (o.S.coneColor.NegativeLinearRGB- ...
+                    o.S.coneColor.BackgroundLinearRGB);
+                PR.presentedPositiveLinearRGB = ...
+                    o.S.coneColor.BackgroundLinearRGB + o.hProbe.dotContrast* ...
+                    (o.S.coneColor.PositiveLinearRGB- ...
+                    o.S.coneColor.BackgroundLinearRGB);
+                PR.presentedNegativeConeContrast = ...
+                    o.hProbe.dotContrast*o.S.coneColor.NegativeConeContrast;
+                PR.presentedPositiveConeContrast = ...
+                    o.hProbe.dotContrast*o.S.coneColor.PositiveConeContrast;
+                PR.coneCalibrationSource = o.S.coneColor.Source;
+                if isfield(o.S.coneColor,'NegativeDeviceCodes')
+                    PR.negativeDeviceCodes = o.S.coneColor.NegativeDeviceCodes;
+                    PR.positiveDeviceCodes = o.S.coneColor.PositiveDeviceCodes;
+                    PR.realizedNegativeConeContrast = ...
+                        o.S.coneColor.RealizedNegativeConeContrast;
+                    PR.realizedPositiveConeContrast = ...
+                        o.S.coneColor.RealizedPositiveConeContrast;
+                end
+                if isfield(o.S.coneColor,'PhotopicLuminanceRGB')
+                    PR.photopicLuminanceRGB = ...
+                        o.S.coneColor.PhotopicLuminanceRGB;
+                    PR.photopicLuminanceConvention = ...
+                        o.S.coneColor.PhotopicLuminanceConvention;
+                    if isfield(o.S.coneColor,'PhotopicLuminanceSource')
+                        PR.photopicLuminanceSource = ...
+                            o.S.coneColor.PhotopicLuminanceSource;
+                    end
+                    PR.negativeCIEYContrast = ...
+                        o.S.coneColor.NegativeCIEYContrast;
+                    PR.positiveCIEYContrast = ...
+                        o.S.coneColor.PositiveCIEYContrast;
+                    PR.realizedNegativeCIEYContrast = ...
+                        o.S.coneColor.RealizedNegativeCIEYContrast;
+                    PR.realizedPositiveCIEYContrast = ...
+                        o.S.coneColor.RealizedPositiveCIEYContrast;
+                    PR.realizedNegativeCIEYResidual = ...
+                        o.S.coneColor.RealizedNegativeCIEYResidual;
+                    PR.realizedPositiveCIEYResidual = ...
+                        o.S.coneColor.RealizedPositiveCIEYResidual;
+                    PR.behavioralCIEYPerMContrast = ...
+                        o.S.coneColor.BehavioralCIEYPerMContrast;
+                    PR.realizedMaximumSilentLeakage = ...
+                        o.S.coneColor.RealizedMaximumSilentLeakage;
+                end
+                if isfield(o.S.coneColor,'Warning')
+                    PR.coneCalibrationWarning = o.S.coneColor.Warning;
+                end
+                if isfield(o.S.coneColor,'PhenotypeID')
+                    PR.conePhenotypeID = o.S.coneColor.PhenotypeID;
+                end
+                if isfield(o.S.coneColor,'MonitorTarget')
+                    PR.coneMonitorTarget = o.S.coneColor.MonitorTarget;
+                end
+            end
+
+            frameIntervals = diff(o.ProbeHistory(1:o.FrameCount,1));
+            frameIntervals = frameIntervals(isfinite(frameIntervals) & frameIntervals > 0);
+            expectedInterval = 1/o.S.frameRate;
+            PR.frameTimingThresholdMs = 1000*1.5*expectedInterval;
+            PR.longFrameCount = nnz(frameIntervals > 1.5*expectedInterval);
+            PR.longFrameFraction = PR.longFrameCount/max(1,numel(frameIntervals));
+            if isempty(frameIntervals)
+                PR.meanFrameIntervalMs = NaN;
+                PR.maxFrameIntervalMs = NaN;
+            else
+                PR.meanFrameIntervalMs = 1000*mean(frameIntervals);
+                PR.maxFrameIntervalMs = 1000*max(frameIntervals);
+            end
+        end
         %******* this is also where you could store Gabor Flash Info
 
         if o.FrameCount == 0
@@ -557,36 +715,35 @@ classdef PR_Acuity_Continuous < handle
         
         
         %%%% Record some data %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %data across trials
-        %Remove first 0.25s since fixation gives starting position for free
-        o.Traces(1:round(0.25*o.S.frameRate),6)=0;
-        targX =o.Traces(o.Traces(:,6)==1,2); targvX=diff(targX);
-        targY =o.Traces(o.Traces(:,6)==1,3); targvY=diff(targY);
-        eyeX =o.Traces(o.Traces(:,6)==1,4); 
-        eyeY =o.Traces(o.Traces(:,6)==1,5); 
-        
-        % We are going to correlate spped rather than position, saccades are going to mess with that so 
-        %smooth eyetraces over time with a 100ms filter before taking speed, to 
-        eyevX=diff(smooth(eyeX,round(0.1*o.S.frameRate))); 
-        eyevY=diff(smooth(eyeY,round(0.1*o.S.frameRate))); 
-        nvalid=nnz(o.Traces(:,6)==1);
-        % 
-        % %+-1 second correlation window,
-        % CCG=xcorr(eyevX+j*eyevY,targvX+j*targvY,o.S.frameRate);
-        % CCG=smooth(CCG,5);
-%         plot(-o.S.frameRate:o.S.frameRate,abs(CCG))
-%         max(abs(CCG))
+        % Remove the first 0.25 s because fixation supplies the starting
+        % position. Keep failed/short trials, but do not analyze them.
+        analysisTraces = o.Traces(1:o.FrameCount,:);
+        discardFrames = min(round(0.25*o.S.frameRate),o.FrameCount);
+        analysisTraces(1:discardFrames,6) = 0;
+        valid = analysisTraces(:,6) == 1 & ...
+            all(isfinite(analysisTraces(:,2:5)),2);
+        targX = analysisTraces(valid,2);
+        targY = analysisTraces(valid,3);
+        eyeX = analysisTraces(valid,4);
+        eyeY = analysisTraces(valid,5);
+        nvalid = nnz(valid);
+        maxLag = round(o.S.frameRate);
+        CCG = nan(1,2*maxLag + 1);
+        proj = NaN;
 
-%vector from eye position to target
-eyetargX=(targX-eyeX);
-eyetargY=(targY-eyeY);
+        if nvalid >= 3
+            smoothFrames = max(1,min(nvalid,round(0.1*o.S.frameRate)));
+            eyevX = diff(smooth(eyeX,smoothFrames));
+            eyevY = diff(smooth(eyeY,smoothFrames));
+            eyetargX = targX-eyeX;
+            eyetargY = targY-eyeY;
 
-% angle b/n direction of target and direction of eye velocities,
-% cos(theta)=(a.b)/(|a||b|)
-proj=nanmean((eyevX.*eyetargX(2:end)+eyevY.*eyetargY(2:end))./(sqrt(eyevX.^2+eyevY.^2).*sqrt(eyetargX(2:end).^2+eyetargY(2:end).^2)));
-
-%Cross corr between vector to center, and vector speed
-CCG=xcorr(eyevX+j*eyevY,eyetargX(2:end)+j*eyetargY(2:end),240);
+            projection = (eyevX.*eyetargX(2:end) + eyevY.*eyetargY(2:end)) ./ ...
+                (hypot(eyevX,eyevY).*hypot(eyetargX(2:end),eyetargY(2:end)));
+            proj = mean(projection,'omitnan');
+            CCG = xcorr(eyevX + 1i*eyevY, ...
+                eyetargX(2:end) + 1i*eyetargY(2:end),maxLag).';
+        end
 
         o.D.ccg(A.j,:)=CCG;
         o.D.proj(A.j,:)=proj;
@@ -597,6 +754,14 @@ CCG=xcorr(eyevX+j*eyevY,eyetargX(2:end)+j*eyetargY(2:end),240);
         o.D.x(A.j) = P.choiceX; 
         o.D.y(A.j) = P.choiceY; 
         o.D.cpd(A.j) = P.cpd;
+        if P.mode == 1
+            o.D.dotDiameterDeg(A.j) = o.hProbe.size/o.S.pixPerDeg;
+            o.D.dotContrast(A.j) = o.hProbe.dotContrast;
+            o.D.dotPlacementFallbacks(A.j) = o.hProbe.placementFallbackCount;
+            o.D.dotPlacementTimeMs(A.j) = 1000*o.hProbe.placementTimeSeconds;
+            o.D.dotPlacementDistanceChecks(A.j) = o.hProbe.placementDistanceChecks;
+            o.D.dotCachedReplacementCount(A.j) = o.hProbe.cachedReplacementCount;
+        end
         
 
         %%%% Plot results %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -613,55 +778,50 @@ CCG=xcorr(eyevX+j*eyevY,eyetargX(2:end)+j*eyetargY(2:end),240);
 % 
 
 
-        % Dataplot3, fraction correct by cycles per degree
-        % This plot only calculates the fraction correct for trials list cpds.
+        % Dataplot3, mean pursuit projection by inverse-size condition.
         cpds = unique(o.trialsList(:,3));
         ncpds = size(cpds,1);
         fcXcpd = zeros(1,ncpds);
         proj_all = zeros(1,ncpds);
         labels = cell(1,ncpds);
-        CCG_all= zeros(o.S.frameRate*2+1,ncpds);
+        maxLag = round(o.S.frameRate);
+        CCG_all = nan(2*maxLag+1,ncpds);
         for i = 1:ncpds
             cpd = cpds(i);
 
             % Combine CCGs, weight by nvalues so to not get thrown off by
             % outliers
-            if ~isempty (o.D.nvalid(:,o.D.cpd == cpd))
-                CCG_all(:,i)=sum(o.D.nvalid(:,o.D.cpd == cpd)*o.D.ccg(o.D.cpd == cpd,:),1);
-                CCG_all(:,i)=CCG_all(:,i)./sum(o.D.nvalid(:,o.D.cpd == cpd));
-                proj_all(:,i)=nanmean(o.D.proj(o.D.cpd == cpd,:),1);
+            trialMask = o.D.cpd == cpd & o.D.nvalid >= 3 & isfinite(o.D.proj);
+            if any(trialMask)
+                weights = o.D.nvalid(trialMask);
+                CCG_all(:,i) = (weights*o.D.ccg(trialMask,:)./sum(weights)).';
+                proj_all(i) = mean(o.D.proj(trialMask),'omitnan');
+            else
+                proj_all(i) = NaN;
             end
 
-            % When active track is lost, a bunch of eyemovements are often
-            % made during a recovery search, this generates correlations
-            % over the entire CCG, need to remove baseline to get real peak
-            % fcXcpd(i) = max(abs(CCG_all(o.S.frameRate:end,i)))-median(abs(CCG_all(:,i)));
-
-            fcXcpd(i) = max(abs(CCG_all(o.S.frameRate:end,i)))-median(abs(CCG_all(:,i)));
             fcXcpd(i) = proj_all(i);
-            labels{i} = num2str(round(cpd)); %num2str(round(10*cpd)/10);
+            labels{i} = sprintf('%.4f',1/(2*cpd));
         end
         
         %Plot most recent cpd presented
         i=find(cpds==P.cpd);
-        plot(A.DataPlot2,(-o.S.frameRate:o.S.frameRate)./o.S.frameRate,abs(CCG_all(:,i)),'b',(-o.S.frameRate:o.S.frameRate)./o.S.frameRate,ones(length(CCG_all(:,i)),1)*median(abs(CCG_all(:,i))),'r-')
-        title(A.DataPlot2,['CCG ' num2str(P.cpd)]);
+        lagSeconds = (-maxLag:maxLag)./o.S.frameRate;
+        plot(A.DataPlot2,lagSeconds,abs(CCG_all(:,i)),'b',lagSeconds,ones(length(CCG_all(:,i)),1)*median(abs(CCG_all(:,i)),'omitnan'),'r-')
+        title(A.DataPlot2,sprintf('CCG, dot %.4f deg',1/(2*P.cpd)));
         
         %legend(A.DataPlot2,num2str(cpds))
 
 
         bar(A.DataPlot3,1:ncpds,fcXcpd);
-        title(A.DataPlot3,'By Cycles per Degree');
-        ylabel(A.DataPlot3,'Max CCG');
+        title(A.DataPlot3,'By dot diameter');
+        ylabel(A.DataPlot3,'Mean pursuit projection');
+        xlabel(A.DataPlot3,'Dot diameter (deg)');
         set(A.DataPlot3,'XTickLabel',labels);
 %         if any(fcXcpd>1)
 %             huh=1; % How can xcorr give values>1 here
 %         end
-        %if max(fcXcpd)>1
-            axis(A.DataPlot3,[.25 ncpds+.75 0 max([max(fcXcpd) 0.1])]);
-        % else
-        %     axis(A.DataPlot3,[.25 ncpds+.75 0 1]);
-        % end
+        axis(A.DataPlot3,[.25 ncpds+.75 -1 1]);
     end
     
   end % methods

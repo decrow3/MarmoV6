@@ -1,0 +1,39 @@
+function condition = marmosetPigmentNullTemplate(calibration)
+% MARMOSETPIGMENTNULLTEMPLATE Common condition schema for diagnostics/controls.
+
+condition = struct();
+condition.ConditionID = '';
+condition.ConditionType = '';
+condition.NullPeakNm = NaN;
+condition.CalibrationSource = calibration.CalibrationSource;
+condition.CalibrationChecksum = calibration.CalibrationChecksum;
+condition.MonitorIdentifier = calibration.MonitorIdentifier;
+condition.ConePeaksNm = calibration.CandidateConePeaksNm(:)';
+condition.CandidateRGBToCones = calibration.CandidateRGBToCones;
+condition.BackgroundLinearRGB = calibration.BackgroundLinearRGB(:)';
+condition.NegativeLinearRGB = [];
+condition.PositiveLinearRGB = [];
+condition.BackgroundDeviceCodes = [];
+condition.NegativeDeviceCodes = [];
+condition.PositiveDeviceCodes = [];
+condition.BackgroundFramebufferRGB255 = [];
+condition.NegativeFramebufferRGB255 = [];
+condition.PositiveFramebufferRGB255 = [];
+condition.RealizedBackgroundLinearRGB = [];
+condition.RealizedNegativeLinearRGB = [];
+condition.RealizedPositiveLinearRGB = [];
+condition.RequestedConeContrast = [];
+condition.RealizedConeContrast = [];
+condition.SilentConeIndices = [];
+condition.MaximumSilentLeakage = NaN;
+condition.PositiveGamutLimit = NaN;
+condition.NegativeGamutLimit = NaN;
+condition.MaximumSymmetricAmplitude = NaN;
+condition.AxisScale = NaN;
+condition.BitDepth = calibration.BitDepth;
+condition.GammaApplication = calibration.GammaApplication;
+condition.IsDummyCalibration = calibration.IsDummyCalibration;
+condition.ValidationPass = false;
+condition.UnitRGBDirection = [];
+condition.UnitCandidateConeContrast = [];
+end

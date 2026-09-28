@@ -1,0 +1,11 @@
+function test_marmoset_cone_phenotype_suite
+% TEST_MARMOSET_CONE_PHENOTYPE_SUITE Run all no-display infrastructure tests.
+
+test_marmoset_pigment_null;
+test_marmoset_phenotype_flow_infrastructure;
+test_flow_following_metrics;
+test_analyze_marmoset_cone_phenotype_flow;
+test_cone_contrast_colors;
+test_human_isoluminant_ml;
+fprintf('test_marmoset_cone_phenotype_suite: all tests passed.\n');
+end

@@ -13,12 +13,13 @@ classdef eyetrack_dummy < marmoview.behavior
   properties (SetAccess = public, GetAccess = public)
     EyeDump logical
     UseAsEyeTracker logical
+    ScreenNumber double = []
     x
     y
   end
     
     methods
-        function o = eyetrack_dummy(~,varargin) % h is the handle for the marmoview gui
+        function o = eyetrack_dummy(config,varargin) % config is the rig input settings
             
             % initialise input parser
             p = inputParser;
@@ -30,6 +31,11 @@ classdef eyetrack_dummy < marmoview.behavior
             %o = o@marmoview.behavior(varargin{:});
             o.EyeDump = args.EyeDump;
             o.UseAsEyeTracker = args.UseAsEyeTracker;
+            if nargin >= 1 && isstruct(config) && ...
+                    isfield(config,'ScreenNumber') && ...
+                    ~isempty(config.ScreenNumber)
+                o.ScreenNumber = double(config.ScreenNumber);
+            end
 
 
             
@@ -69,7 +75,11 @@ classdef eyetrack_dummy < marmoview.behavior
         end
         
         function [x,y] = getgaze(self,~)
-            [x,y] = GetMouse;
+            if isempty(self.ScreenNumber)
+                [x,y] = GetMouse;
+            else
+                [x,y] = GetMouse(self.ScreenNumber);
+            end
             self.x = x;
             self.y = y;     
             %other specs depend on screen and position

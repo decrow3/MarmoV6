@@ -23,8 +23,13 @@ end
 % PsychImaging('AddTask', 'General', 'FloatingPoint16Bit');
 PsychImaging('AddTask','General','FloatingPoint32BitIfPossible', 'disableDithering',1);
 
-% Applies a simple power-law gamma correction
-PsychImaging('AddTask','FinalFormatting','DisplayColorCorrection','SimpleGamma');
+% Empirically software-encoded cone stimuli already contain the inverse-gamma
+% transform. All legacy protocols retain the existing PTB SimpleGamma path.
+softwareEncoded = isfield(S,'gammaApplication') && ...
+    strcmpi(char(S.gammaApplication),'software-encoded');
+if ~softwareEncoded
+    PsychImaging('AddTask','FinalFormatting','DisplayColorCorrection','SimpleGamma');
+end
 
 % create the ptb window...
 if isfield(S,'DummyScreen') && S.DummyScreen
@@ -32,9 +37,20 @@ if isfield(S,'DummyScreen') && S.DummyScreen
 else    
   [A.window, A.screenRect] = PsychImaging('OpenWindow',S.screenNumber,S.bgColour);
   
-  % Add gamma correction
-  PsychColorCorrection('SetEncodingGamma',A.window,1/S.gamma);
+  if ~softwareEncoded
+      % Add gamma correction. Cone-calibrated protocols can provide separate
+      % encoding exponents for the red, green, and blue primaries.
+      if isfield(S,'inverseGamma') && ~isempty(S.inverseGamma)
+          encodingGamma = S.inverseGamma;
+      else
+          encodingGamma = 1 ./ S.gamma;
+      end
+      PsychColorCorrection('SetEncodingGamma',A.window,encodingGamma);
+  end
 end
+
+A.gammaApplication = ternary(softwareEncoded, ...
+    'software-encoded empirical device values','ptb-simple-gamma');
 
 A.frameRate = FrameRate(A.window);
 
@@ -53,4 +69,15 @@ if isfield(S, 'DataPixx') && S.DataPixx
         Datapixx('EnablePropixxLampLed');
         Datapixx('RegWr');
     end
+end
+
+end
+
+
+function value = ternary(condition,trueValue,falseValue)
+if condition
+    value = trueValue;
+else
+    value = falseValue;
+end
 end
