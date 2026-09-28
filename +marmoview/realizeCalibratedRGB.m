@@ -1,5 +1,11 @@
 function realization = realizeCalibratedRGB(calibration,linearRGB)
 % REALIZECALIBRATEDRGB Apply empirical inverse gamma and framebuffer quantization.
+%
+% software-encoded: the framebuffer holds inverse-gamma device values,
+%   quantized to calibration.BitDepth; no further gamma is applied.
+% ptb-gamma-lut: the framebuffer holds linear values, quantized to an 8-bit
+%   gamma-table index; each table entry holds the inverse-gamma device value
+%   quantized to calibration.BitDepth (the DAC depth).
 
 linearRGB = double(linearRGB);
 if isvector(linearRGB)
@@ -11,6 +17,17 @@ if size(linearRGB,2) ~= 3 || any(~isfinite(linearRGB(:))) || ...
         'linearRGB must be an in-gamut N-by-3 matrix.');
 end
 
+switch lower(calibration.GammaApplication)
+    case 'software-encoded'
+        inverseGammaInput = linearRGB;
+    case 'ptb-gamma-lut'
+        tableIndex = round(255*linearRGB);
+        inverseGammaInput = tableIndex/255;
+    otherwise
+        error('realizeCalibratedRGB:GammaPolicy', ...
+            'Unsupported gamma policy: %s',calibration.GammaApplication);
+end
+
 maximumCode = 2^calibration.BitDepth-1;
 deviceInput = zeros(size(linearRGB));
 for channel = 1:3
@@ -19,7 +36,7 @@ for channel = 1:3
     [measuredLinear,uniqueIndex] = unique(measuredLinear,'stable');
     measuredDevice = measuredDevice(uniqueIndex);
     deviceInput(:,channel) = interp1(measuredLinear,measuredDevice, ...
-        linearRGB(:,channel),'pchip');
+        inverseGammaInput(:,channel),'pchip');
 end
 if any(~isfinite(deviceInput(:))) || any(deviceInput(:) < -1e-9) || ...
         any(deviceInput(:) > 1+1e-9)
@@ -39,14 +56,10 @@ for channel = 1:3
 end
 realizedLinear = min(max(realizedLinear,0),1);
 
-switch lower(calibration.GammaApplication)
-    case 'software-encoded'
-        framebufferRGB = quantizedDevice;
-    case 'ptb-gamma-lut'
-        framebufferRGB = linearRGB;
-    otherwise
-        error('realizeCalibratedRGB:GammaPolicy', ...
-            'Unsupported gamma policy: %s',calibration.GammaApplication);
+if strcmpi(calibration.GammaApplication,'software-encoded')
+    framebufferRGB = quantizedDevice;
+else
+    framebufferRGB = inverseGammaInput;
 end
 
 realization = struct();

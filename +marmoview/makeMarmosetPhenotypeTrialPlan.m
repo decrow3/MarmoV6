@@ -1,21 +1,46 @@
 function plan = makeMarmosetPhenotypeTrialPlan(conditionBank,options)
-% MAKEMARMOSETPHENOTYPETRIALPLAN Balanced, reproducible condition schedule.
+% MAKEMARMOSETPHENOTYPETRIALPLAN Balanced, reproducible two-field rivalry schedule.
+%
+% Every trial shows two contraction fields (A and B) moving along the two
+% walks of one trajectory pair. Pair types:
+%   null-null         diagnostic: two contrast-matched pigment nulls
+%   null-catch        detection of each null against an invisible field
+%   achromatic-catch  detection of achromatic fields
+%   null-achromatic   optional: null against the matched achromatic field
+%   catch-catch       baseline: both fields invisible
+%
+% Every pair receives the identical sequence of (trajectory pair, walk
+% assignment) combinations, cycling through all combinations before any
+% repeats, so trajectory difficulty cannot differ between pairs.
+%
+% Options: RepeatsPerPair (12; legacy RepeatsPerCondition), TrajectoryPairCount
+% (6; legacy TrajectoryCount), RandomSeed, RewardAmount, CatchTrialFraction
+% (0.1, catch-catch share of all trials), IncludeDetectionPairs (true),
+% IncludeAchromaticPairs (false), MaximumRun (2).
 
-options = setDefault(options,'RepeatsPerCondition',10);
-options = setDefault(options,'TrajectoryCount',5);
+if nargin < 2 || isempty(options)
+    options = struct();
+end
+if isfield(options,'RepeatsPerCondition') && ~isfield(options,'RepeatsPerPair')
+    options.RepeatsPerPair = options.RepeatsPerCondition;
+end
+if isfield(options,'TrajectoryCount') && ~isfield(options,'TrajectoryPairCount')
+    options.TrajectoryPairCount = options.TrajectoryCount;
+end
+options = setDefault(options,'RepeatsPerPair',12);
+options = setDefault(options,'TrajectoryPairCount',6);
 options = setDefault(options,'RandomSeed',1);
 options = setDefault(options,'RewardAmount',1);
 options = setDefault(options,'CatchTrialFraction',0.1);
+options = setDefault(options,'IncludeDetectionPairs',true);
+options = setDefault(options,'IncludeAchromaticPairs',false);
+options = setDefault(options,'MaximumRun',2);
 
-conditions = conditionBank.Conditions;
-ids = {conditions.ConditionID};
-catchIndex = find(strcmp(ids,'catch'),1);
-noncatchIndices = find(~strcmp(ids,'catch'));
-repeats = round(options.RepeatsPerCondition);
-trajectoryCount = round(options.TrajectoryCount);
+repeats = round(options.RepeatsPerPair);
+trajectoryCount = round(options.TrajectoryPairCount);
 if repeats < 1 || trajectoryCount < 1
     error('makeMarmosetPhenotypeTrialPlan:Counts', ...
-        'RepeatsPerCondition and TrajectoryCount must be positive integers.');
+        'RepeatsPerPair and TrajectoryPairCount must be positive integers.');
 end
 if ~isscalar(options.CatchTrialFraction) || ...
         options.CatchTrialFraction < 0 || options.CatchTrialFraction >= 1
@@ -23,67 +48,161 @@ if ~isscalar(options.CatchTrialFraction) || ...
         'CatchTrialFraction must be a scalar in [0,1).');
 end
 
-rows = zeros(numel(noncatchIndices)*repeats,6);
-cursor = 0;
+pairs = buildPairs(conditionBank,options);
+if ~any(strcmp({pairs.PairType},'null-null'))
+    error('makeMarmosetPhenotypeTrialPlan:NoDiagnosticPairs', ...
+        'The condition bank must contain at least two pigment nulls per level.');
+end
 stream = RandStream('mt19937ar','Seed',round(options.RandomSeed));
-for conditionIndex = noncatchIndices
-    condition = conditions(conditionIndex);
-    levelIndex = find(abs(conditionBank.ContrastLevels-condition.AxisScale) < 1e-12,1);
-    if isempty(levelIndex)
-        levelIndex = 0;
-    end
-    trajectoryOrder = zeros(1,0);
-    while numel(trajectoryOrder) < repeats
-        trajectoryOrder = [trajectoryOrder ...
-            randperm(stream,trajectoryCount)]; %#ok<AGROW>
-    end
-    trajectoryOrder = trajectoryOrder(1:repeats);
+combinations = [repelem((1:trajectoryCount)',2) repmat([1;2],trajectoryCount,1)];
+schedule = zeros(0,2);
+while size(schedule,1) < repeats
+    schedule = [schedule; combinations(randperm(stream,size(combinations,1)),:)]; %#ok<AGROW>
+end
+schedule = schedule(1:repeats,:);
+
+columns = {'PairIndex','ConditionIndexA','ConditionIndexB', ...
+    'ContrastLevelIndex','TrajectoryPairIndex','WalkForA', ...
+    'RepeatIndex','TrialRandomSeed','RewardAmount'};
+isCatchCatch = strcmp({pairs.PairType},'catch-catch');
+mainPairs = find(~isCatchCatch);
+rows = zeros(numel(mainPairs)*repeats,numel(columns));
+cursor = 0;
+for pairIndex = mainPairs
     for repeatIndex = 1:repeats
         cursor = cursor+1;
-        rows(cursor,:) = [conditionIndex levelIndex ...
-            trajectoryOrder(repeatIndex) repeatIndex ...
-            randi(stream,2^31-1) options.RewardAmount];
+        rows(cursor,:) = [pairIndex pairs(pairIndex).ConditionIndexA ...
+            pairs(pairIndex).ConditionIndexB pairs(pairIndex).ContrastLevelIndex ...
+            schedule(repeatIndex,:) repeatIndex randi(stream,2^31-1) ...
+            options.RewardAmount];
     end
 end
+typeCodes = cellfun(@(type) find(strcmp(type,uniquePairTypes())), ...
+    {pairs.PairType});
+rows = constrainedShuffle(rows,typeCodes,options.MaximumRun,stream);
 
-rows = constrainedShuffle(rows,stream);
-catchCount = round(options.CatchTrialFraction/(1-options.CatchTrialFraction)*size(rows,1));
-if ~isempty(catchIndex) && catchCount > 0
-    catchRows = zeros(catchCount,6);
+catchPair = find(isCatchCatch,1);
+catchCount = round(options.CatchTrialFraction/(1-options.CatchTrialFraction)* ...
+    size(rows,1));
+if ~isempty(catchPair) && catchCount > 0
+    catchRows = zeros(catchCount,numel(columns));
     for ii = 1:catchCount
-        catchRows(ii,:) = [catchIndex 0 mod(ii-1,trajectoryCount)+1 ii ...
+        combination = combinations(mod(ii-1,size(combinations,1))+1,:);
+        catchRows(ii,:) = [catchPair pairs(catchPair).ConditionIndexA ...
+            pairs(catchPair).ConditionIndexB 0 combination ii ...
             randi(stream,2^31-1) options.RewardAmount];
     end
     insertAfter = round(linspace(1,size(rows,1),catchCount+2));
     insertAfter = insertAfter(2:end-1);
     for ii = catchCount:-1:1
         rows = [rows(1:insertAfter(ii),:);catchRows(ii,:); ...
-            rows(insertAfter(ii)+1:end,:)]; %#ok<AGROW>
+            rows(insertAfter(ii)+1:end,:)];
     end
 end
 
 plan = struct();
-plan.SchemaVersion = 'MarmosetPhenotypeTrialPlan-1.0';
+plan.SchemaVersion = 'MarmosetPhenotypeRivalryPlan-2.0';
 plan.RandomSeed = round(options.RandomSeed);
-plan.Columns = {'ConditionIndex','ContrastLevelIndex','TrajectoryIndex', ...
-    'RepeatIndex','TrialRandomSeed','RewardAmount'};
+plan.Columns = columns;
 plan.Rows = rows;
-plan.ConditionIDs = ids;
+plan.Pairs = pairs;
+plan.ConditionIDs = {conditionBank.Conditions.ConditionID};
+plan.TrajectorySchedule = schedule;
+plan.Options = options;
 end
 
 
-function rows = constrainedShuffle(rows,stream)
+function pairs = buildPairs(bank,options)
+conditions = bank.Conditions;
+types = {conditions.ConditionType};
+isNull = strcmp(types,'pigment-null');
+isNominalNull = isNull & ismember([conditions.NullPeakNm],[543 556 563]);
+achromatic = find(strcmp(types,'achromatic'));
+catchIndex = find(strcmp(types,'catch'),1);
+levelIndex = @(index) levelOf(bank,conditions(index));
+
+pairs = struct('PairID',{},'PairType',{},'ConditionIndexA',{}, ...
+    'ConditionIndexB',{},'ContrastLevelIndex',{});
+for level = 1:numel(bank.ContrastLevels)
+    members = find(isNominalNull & arrayfun(levelIndex,1:numel(conditions)) == level);
+    for first = 1:numel(members)
+        for second = first+1:numel(members)
+            pairs = addPair(pairs,'null-null',conditions,members(first), ...
+                members(second),level);
+        end
+    end
+end
+if logical(options.IncludeDetectionPairs) && ~isempty(catchIndex)
+    for index = find(isNull)
+        pairs = addPair(pairs,'null-catch',conditions,index,catchIndex, ...
+            levelIndex(index));
+    end
+    for index = achromatic
+        pairs = addPair(pairs,'achromatic-catch',conditions,index,catchIndex,0);
+    end
+end
+if logical(options.IncludeAchromaticPairs)
+    for index = find(isNominalNull)
+        matches = achromatic(abs([conditions(achromatic).MatchedContrast] - ...
+            conditions(index).MatchedContrast) < 1e-9);
+        for match = matches
+            pairs = addPair(pairs,'null-achromatic',conditions,index,match, ...
+                levelIndex(index));
+        end
+    end
+end
+if ~isempty(catchIndex)
+    pairs = addPair(pairs,'catch-catch',conditions,catchIndex,catchIndex,0);
+end
+end
+
+
+function pairs = addPair(pairs,type,conditions,first,second,level)
+pairs(end+1).PairID = sprintf('%s__%s',conditions(first).ConditionID, ...
+    conditions(second).ConditionID);
+pairs(end).PairType = type;
+pairs(end).ConditionIndexA = first;
+pairs(end).ConditionIndexB = second;
+pairs(end).ContrastLevelIndex = level;
+end
+
+
+function level = levelOf(bank,condition)
+level = 0;
+if strcmp(condition.ConditionType,'pigment-null')
+    match = find(abs(bank.ContrastLevels-condition.AxisScale) < 1e-12,1);
+    if ~isempty(match)
+        level = match;
+    end
+end
+end
+
+
+function types = uniquePairTypes()
+types = {'null-null','null-catch','achromatic-catch','null-achromatic','catch-catch'};
+end
+
+
+function rows = constrainedShuffle(rows,typeCodes,maximumRun,stream)
 original = rows;
 for attempt = 1:1000
     remaining = original;
     candidate = zeros(size(original));
     success = true;
     for position = 1:size(candidate,1)
-        permitted = 1:size(remaining,1);
-        if position > 2 && ...
-                candidate(position-1,1) == candidate(position-2,1)
-            permitted = permitted(remaining(:,1) ~= candidate(position-1,1));
+        permitted = true(size(remaining,1),1);
+        if position > maximumRun
+            recent = candidate(position-maximumRun:position-1,1);
+            if all(recent == recent(1))
+                permitted = permitted & remaining(:,1) ~= recent(1);
+            end
+            recentTypes = typeCodes(recent);
+            if all(recentTypes == recentTypes(1))
+                permitted = permitted & ...
+                    typeCodes(remaining(:,1))' ~= recentTypes(1);
+            end
         end
+        permitted = find(permitted);
         if isempty(permitted)
             success = false;
             break
@@ -98,7 +217,7 @@ for attempt = 1:1000
     end
 end
 error('makeMarmosetPhenotypeTrialPlan:Randomization', ...
-    'Unable to satisfy the consecutive-condition constraint after 1000 attempts.');
+    'Unable to satisfy the consecutive-pair constraints after 1000 attempts.');
 end
 
 

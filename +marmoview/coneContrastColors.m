@@ -6,6 +6,12 @@ function colors = coneContrastColors(calibrationSource,coneAxis,axisScale,coneSe
 %
 % coneAxis is expressed in the order given by result.ConePeaks. For the
 % ConeMath2026 human preset [558 530 420], [-1 1 0] is the M-L axis.
+%
+% When the calibration contains measured gamma curves (GammaDeviceInput /
+% GammaLinearOutput), device codes and realized values use those curves
+% and colors.Encoded*RGB255 hold software-encoded framebuffer values
+% (GammaSource 'empirical'). Otherwise the power-law exponent is used
+% (GammaSource 'power-law'). *RGB255 fields are always linear.
 
 if nargin < 3 || isempty(axisScale)
     axisScale = 1;
@@ -93,7 +99,34 @@ if isfield(result,'BitDepth')
 else
     colors.BitDepth = 8;
 end
-if isfield(colors,'GammaExponent') && isfield(colors,'InverseGamma')
+if hasEmpiricalGamma(result)
+    % Measured gamma curves take precedence over any fitted exponent.
+    calibration = struct( ...
+        'GammaDeviceInput',{gammaCurves(result.GammaDeviceInput)}, ...
+        'GammaLinearOutput',{gammaCurves(result.GammaLinearOutput)}, ...
+        'BitDepth',colors.BitDepth,'GammaApplication','software-encoded');
+    realization = marmoview.realizeCalibratedRGB(calibration, ...
+        [backgroundRGB'; negativeLinearRGB'; positiveLinearRGB']);
+    colors.GammaSource = 'empirical';
+    colors.BackgroundDeviceCodes = realization.DeviceCodes(1,:);
+    colors.NegativeDeviceCodes = realization.DeviceCodes(2,:);
+    colors.PositiveDeviceCodes = realization.DeviceCodes(3,:);
+    colors.EncodedBackgroundRGB255 = realization.FramebufferRGB255(1,:);
+    colors.EncodedNegativeRGB255 = realization.FramebufferRGB255(2,:);
+    colors.EncodedPositiveRGB255 = realization.FramebufferRGB255(3,:);
+    colors.RealizedBackgroundLinearRGB = realization.RealizedLinearRGB(1,:);
+    colors.RealizedNegativeLinearRGB = realization.RealizedLinearRGB(2,:);
+    colors.RealizedPositiveLinearRGB = realization.RealizedLinearRGB(3,:);
+    realizedBackgroundExcitation = rgbToCones* ...
+        colors.RealizedBackgroundLinearRGB(:);
+    colors.RealizedNegativeConeContrast = ((rgbToCones* ...
+        colors.RealizedNegativeLinearRGB(:))-realizedBackgroundExcitation)' ./ ...
+        realizedBackgroundExcitation';
+    colors.RealizedPositiveConeContrast = ((rgbToCones* ...
+        colors.RealizedPositiveLinearRGB(:))-realizedBackgroundExcitation)' ./ ...
+        realizedBackgroundExcitation';
+elseif isfield(colors,'GammaExponent') && isfield(colors,'InverseGamma')
+    colors.GammaSource = 'power-law';
     maximumCode = 2^colors.BitDepth-1;
     colors.NegativeDeviceCodes = round(maximumCode* ...
         negativeLinearRGB'.^colors.InverseGamma);
@@ -207,6 +240,11 @@ end
 
 
 function result = selectJsonResult(value,coneSelection)
+if isfield(value,'ConePeaksNm') && isfield(value,'RGBToCones')
+    result = coneMathManifestResult(value);
+    validateConeResult(result);
+    return
+end
 if isfield(value,'phenotypes')
     candidates = value.phenotypes;
     requireSelection(coneSelection);
@@ -249,6 +287,46 @@ for ii = 1:size(jsonMap,1)
     end
 end
 validateConeResult(result);
+end
+
+
+function result = coneMathManifestResult(value)
+% ConeMath2026 manifest.json (PascalCase fields).
+result = struct();
+result.ConePeaks = double(value.ConePeaksNm(:))';
+result.RGB_to_Cones = double(value.RGBToCones);
+result.Cones_to_RGB = pinv(result.RGB_to_Cones);
+result.BackgroundRGB = double(value.BackgroundRGB(:));
+map = {'GammaDeviceInput','GammaDeviceInput'; 'GammaLinearOutput','GammaLinearOutput'
+    'BitDepth','BitDepth'; 'GammaApplication','GammaApplication'
+    'SchemaVersion','SchemaVersion'; 'PhenotypeID','PhenotypeID'
+    'MonitorIdentifier','MonitorTarget'};
+for ii = 1:size(map,1)
+    if isfield(value,map{ii,1})
+        result.(map{ii,2}) = value.(map{ii,1});
+    end
+end
+if isfield(value,'Validation') && isfield(value.Validation,'ConditionNumber')
+    result.ConditionNumber = value.Validation.ConditionNumber;
+end
+end
+
+
+function tf = hasEmpiricalGamma(result)
+tf = isfield(result,'GammaDeviceInput') && isfield(result,'GammaLinearOutput') && ...
+    ~isempty(result.GammaDeviceInput) && ~isempty(result.GammaLinearOutput);
+end
+
+
+function curves = gammaCurves(value)
+% Accept a three-cell array, an N-by-3 matrix, or a 3-by-N matrix.
+if iscell(value)
+    curves = reshape(cellfun(@(x) double(x(:)),value,'UniformOutput',false),1,3);
+elseif size(value,2) == 3
+    curves = arrayfun(@(ii) double(value(:,ii)),1:3,'UniformOutput',false);
+else
+    curves = arrayfun(@(ii) double(value(ii,:))',1:3,'UniformOutput',false);
+end
 end
 
 

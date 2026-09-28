@@ -31,21 +31,34 @@ if S.coneCalibrationIsDummy
     S.protocolTitle = 'DUMMY Human M-L Track';
 end
 
-% Feed linear RGB to the existing floating-point framebuffer and let the
-% Psychtoolbox final-formatting stage perform per-primary gamma encoding.
-if isfield(S.coneColor,'GammaExponent')
-    S.gamma = S.coneColor.GammaExponent;
-end
-if isfield(S.coneColor,'InverseGamma')
-    S.inverseGamma = S.coneColor.InverseGamma;
-else
-    error('Acuity_Continuous_HumanML:GammaMissing', ...
-        'The cone calibration must include GammaExponent or InverseGamma.');
-end
-
 if max(abs(S.coneColor.BackgroundRGB255-mean(S.coneColor.BackgroundRGB255))) > 1e-9
     error('Acuity_Continuous_HumanML:NonGrayBackground', ...
         'This pilot expects an equal-RGB neutral background.');
+end
+
+if isfield(S.coneColor,'GammaSource') && strcmp(S.coneColor.GammaSource,'empirical')
+    % Measured gamma curves: draw software-encoded values and let openScreen
+    % skip the power-law correction, so gamma is applied exactly once.
+    S.gammaApplication = 'software-encoded';
+    S.coneColor.LinearBackgroundRGB255 = S.coneColor.BackgroundRGB255;
+    S.coneColor.LinearNegativeRGB255 = S.coneColor.NegativeRGB255;
+    S.coneColor.LinearPositiveRGB255 = S.coneColor.PositiveRGB255;
+    S.coneColor.BackgroundRGB255 = S.coneColor.EncodedBackgroundRGB255;
+    S.coneColor.NegativeRGB255 = S.coneColor.EncodedNegativeRGB255;
+    S.coneColor.PositiveRGB255 = S.coneColor.EncodedPositiveRGB255;
+    S.coneColor.RequiresUnitDotContrast = true;
+else
+    % Only a power-law exponent is available (e.g., the proxy): feed linear
+    % RGB and let the Psychtoolbox final-formatting stage encode it.
+    if isfield(S.coneColor,'GammaExponent')
+        S.gamma = S.coneColor.GammaExponent;
+    end
+    if isfield(S.coneColor,'InverseGamma')
+        S.inverseGamma = S.coneColor.InverseGamma;
+    else
+        error('Acuity_Continuous_HumanML:GammaMissing', ...
+            'The cone calibration must include measured gamma or InverseGamma.');
+    end
 end
 P.bkgd = mean(S.coneColor.BackgroundRGB255);
 S.bgColour = S.coneColor.BackgroundRGB255;

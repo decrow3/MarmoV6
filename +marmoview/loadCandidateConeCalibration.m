@@ -1,11 +1,23 @@
 function calibration = loadCandidateConeCalibration(calibrationSource,options)
 % LOADCANDIDATECONECALIBRATION Load the marmoset candidate-cone contract.
+%
+% Options:
+%   AllowDummy                 Accept dummy/proxy calibrations (default false)
+%   ExpectedMonitorIdentifier  Active rig monitor; must match when non-empty
+%   RequireModel               Require the exported pigment model (default false)
+%   MaximumCalibrationAgeDays  Reject older calibrations (default Inf)
+%   ReferenceDate              Date used for the age check (default now)
+%   BackgroundLinearRGB        Replace the exported background (default [])
 
 if nargin < 2 || isempty(options)
     options = struct();
 end
 options = setDefault(options,'AllowDummy',false);
 options = setDefault(options,'ExpectedMonitorIdentifier','');
+options = setDefault(options,'RequireModel',false);
+options = setDefault(options,'MaximumCalibrationAgeDays',Inf);
+options = setDefault(options,'ReferenceDate',datetime('now'));
+options = setDefault(options,'BackgroundLinearRGB',[]);
 
 [raw,sourceName] = readSource(calibrationSource);
 raw = unwrapRuntime(raw);
@@ -53,7 +65,20 @@ calibration.CalibrationDate = char(requireField(raw, ...
 calibration.CalibrationSource = sourceName;
 calibration.IsDummyCalibration = detectDummy(raw,sourceName);
 
+calibration.NomogramModel = optionalField(raw,{'NomogramModel'},[]);
+calibration.ModelAvailable = ~isempty(calibration.NomogramModel);
+calibration.RodPeakNm = double(optionalField(raw,{'RodPeakNm'},NaN));
+calibration.RodRGBToExcitation = double(optionalField(raw, ...
+    {'RodRGBToExcitation'},nan(1,3)));
+luminanceRow = double(optionalField(raw, ...
+    {'PhotopicLuminanceCdM2PerLinearRGB'},nan(1,3)));
+if any(~isfinite(luminanceRow)) && isfield(raw,'PhotopicLuminanceRGB')
+    luminanceRow = 683*double(raw.PhotopicLuminanceRGB);
+end
+calibration.PhotopicLuminanceCdM2PerLinearRGB = reshape(luminanceRow,1,3);
+
 validateCalibration(calibration,options);
+calibration = applyBackground(calibration,options.BackgroundLinearRGB);
 end
 
 
@@ -112,6 +137,17 @@ error('loadCandidateConeCalibration:MissingMetadata', ...
 end
 
 
+function value = optionalField(source,names,defaultValue)
+value = defaultValue;
+for ii = 1:numel(names)
+    if isfield(source,names{ii}) && ~isempty(source.(names{ii}))
+        value = source.(names{ii});
+        return
+    end
+end
+end
+
+
 function curves = normalizeGamma(value)
 if iscell(value)
     if numel(value) ~= 3
@@ -143,11 +179,7 @@ if ~isequal(size(calibration.CandidateRGBToCones),[4 3]) || ...
         'CandidateRGBToCones must be a finite 4-by-3 matrix.');
 end
 background = calibration.BackgroundLinearRGB(:);
-if numel(background) ~= 3 || any(~isfinite(background)) || ...
-        any(background <= 0) || any(background >= 1)
-    error('loadCandidateConeCalibration:Background', ...
-        'BackgroundLinearRGB must contain three values strictly inside (0,1).');
-end
+validateBackground(background);
 expectedExcitation = calibration.CandidateRGBToCones*background;
 providedExcitation = calibration.CandidateBackgroundExcitations(:);
 if numel(providedExcitation) ~= 4 || any(providedExcitation <= 0) || ...
@@ -194,6 +226,102 @@ if ~isempty(expectedMonitor) && ...
         'Calibration monitor "%s" does not match active rig "%s".', ...
         calibration.MonitorIdentifier,expectedMonitor);
 end
+validateAge(calibration.CalibrationDate,options);
+validateModel(calibration,options);
+end
+
+
+function validateBackground(background)
+if numel(background) ~= 3 || any(~isfinite(background)) || ...
+        any(background <= 0) || any(background >= 1)
+    error('loadCandidateConeCalibration:Background', ...
+        'BackgroundLinearRGB must contain three values strictly inside (0,1).');
+end
+end
+
+
+function validateAge(dateText,options)
+maximumAge = double(options.MaximumCalibrationAgeDays);
+if ~isfinite(maximumAge)
+    return
+end
+calibrationDate = parseDate(dateText);
+if isnat(calibrationDate)
+    error('loadCandidateConeCalibration:CalibrationDate', ...
+        'Calibration date "%s" cannot be parsed for the age check.',dateText);
+end
+ageDays = days(datetime(options.ReferenceDate)-calibrationDate);
+if ageDays > maximumAge
+    error('loadCandidateConeCalibration:CalibrationAge', ...
+        'Calibration is %.0f days old; the limit is %g days.',ageDays,maximumAge);
+end
+end
+
+
+function value = parseDate(text)
+formats = {'yyyy-MM-dd HH:mm:ss','yyyy-MM-dd''T''HH:mm:ss','yyyy-MM-dd', ...
+    'dd-MMM-yyyy HH:mm:ss','dd-MMM-yyyy','MM/dd/yyyy'};
+value = NaT;
+for ii = 1:numel(formats)
+    try
+        value = datetime(strtrim(char(text)),'InputFormat',formats{ii});
+        return
+    catch
+    end
+end
+end
+
+
+function validateModel(calibration,options)
+if ~calibration.ModelAvailable
+    if logical(options.RequireModel)
+        error('loadCandidateConeCalibration:ModelMissing', ...
+            ['Calibration lacks NomogramModel; re-export with ' ...
+            'ConeMath2026 schema 2.2 or later.']);
+    end
+    return
+end
+model = calibration.NomogramModel;
+reproduced = marmoview.pigmentFundamentals(model,calibration.WavelengthsNm, ...
+    calibration.CandidateConePeaksNm)*calibration.PrimarySpectra;
+T = calibration.CandidateRGBToCones;
+if max(abs(reproduced-T),[],'all') > 1e-8*max(abs(T),[],'all')
+    error('loadCandidateConeCalibration:ModelMismatch', ...
+        'NomogramModel does not reproduce CandidateRGBToCones.');
+end
+if isfinite(calibration.RodPeakNm) && all(isfinite(calibration.RodRGBToExcitation))
+    rod = marmoview.pigmentFundamentals(model,calibration.WavelengthsNm, ...
+        calibration.RodPeakNm)*calibration.PrimarySpectra;
+    if max(abs(rod-calibration.RodRGBToExcitation)) > ...
+            1e-8*max(abs(calibration.RodRGBToExcitation))
+        error('loadCandidateConeCalibration:ModelMismatch', ...
+            'NomogramModel does not reproduce RodRGBToExcitation.');
+    end
+end
+end
+
+
+function calibration = applyBackground(calibration,overrideBackground)
+calibration.ExportedBackgroundLinearRGB = calibration.BackgroundLinearRGB(:)';
+if ~isempty(overrideBackground)
+    overrideBackground = double(overrideBackground(:));
+    validateBackground(overrideBackground);
+    calibration.BackgroundLinearRGB = overrideBackground';
+end
+b = calibration.BackgroundLinearRGB(:);
+calibration.BackgroundLinearRGB = b';
+calibration.CandidateBackgroundExcitations = calibration.CandidateRGBToCones*b;
+if calibration.ModelAvailable && ~isfinite(calibration.RodPeakNm)
+    calibration.RodPeakNm = 500;
+end
+if calibration.ModelAvailable && any(~isfinite(calibration.RodRGBToExcitation))
+    calibration.RodRGBToExcitation = marmoview.pigmentFundamentals( ...
+        calibration.NomogramModel,calibration.WavelengthsNm, ...
+        calibration.RodPeakNm)*calibration.PrimarySpectra;
+end
+calibration.RodBackgroundExcitation = calibration.RodRGBToExcitation*b;
+calibration.BackgroundLuminanceCdM2 = ...
+    calibration.PhotopicLuminanceCdM2PerLinearRGB*b;
 end
 
 

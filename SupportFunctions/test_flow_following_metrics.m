@@ -1,5 +1,5 @@
 function test_flow_following_metrics
-% Synthetic perfect, random, delayed, and missing-eye metric tests.
+% Synthetic perfect, random, delayed, stationary, gap, and missing-eye tests.
 
 frameRate = 60;
 n = 300;
@@ -15,24 +15,48 @@ perfectMetrics = marmoview.flowFollowingMetrics( ...
 assert(perfectMetrics.TrialValid);
 assert(perfectMetrics.MedianGazeToFlowCentreDistanceDeg < 1e-10);
 assert(perfectMetrics.BestCorrelation > 0.95);
+assert(abs(perfectMetrics.PursuitGain-1) < 0.05);
 
 stream = RandStream('mt19937ar','Seed',7);
 randomEye = 3*randn(stream,n,2);
-randomTrace = [t target randomEye ones(n,1)];
 randomMetrics = marmoview.flowFollowingMetrics( ...
-    randomTrace,flipTimes,frameRate,2,options);
+    [t target randomEye ones(n,1)],flipTimes,frameRate,2,options);
 assert(randomMetrics.MedianGazeToFlowCentreDistanceDeg > ...
     perfectMetrics.MedianGazeToFlowCentreDistanceDeg);
 assert(randomMetrics.BestCorrelation < perfectMetrics.BestCorrelation);
 
+% Positive lag means the eye trails the centre.
 delayFrames = 12;
 delayedEye = [repmat(target(1,:),delayFrames,1);target(1:end-delayFrames,:)];
-delayedTrace = [t target delayedEye ones(n,1)];
 delayedMetrics = marmoview.flowFollowingMetrics( ...
-    delayedTrace,flipTimes,frameRate,2,options);
+    [t target delayedEye ones(n,1)],flipTimes,frameRate,2,options);
 assert(delayedMetrics.TrialValid);
-assert(abs(delayedMetrics.BestCorrelationLagSeconds) >= ...
-    (delayFrames-2)/frameRate);
+assert(abs(delayedMetrics.BestCorrelationLagSeconds-delayFrames/frameRate) <= 2/frameRate);
+
+% A stationary eye that starts on the centre has no response latency and
+% does not approach the centre relative to its pre-stimulus position.
+stationaryEye = repmat(target(1,:),n,1);
+stationaryOptions = options;
+stationaryOptions.PreStimulusEyeDeg = target(1,:);
+stationary = marmoview.flowFollowingMetrics( ...
+    [t target stationaryEye ones(n,1)],flipTimes,frameRate,2,stationaryOptions);
+assert(isnan(stationary.ResponseLatencySeconds));
+assert(abs(stationary.PrePostDistanceChangeDeg) < 1e-12);
+movingOptions = stationaryOptions;
+following = marmoview.flowFollowingMetrics( ...
+    [t target delayedEye ones(n,1)],flipTimes,frameRate,2,movingOptions);
+assert(following.PrePostDistanceChangeDeg < -0.5);
+assert(following.ResponseLatencySeconds >= 0.25 && ...
+    following.ResponseLatencySeconds < 1.5);
+
+% A dropout longer than the limit invalidates the trial.
+gap = perfect;
+gap(120:150,6) = 0;
+gap(120:150,4:5) = NaN;
+gapMetrics = marmoview.flowFollowingMetrics(gap,flipTimes,frameRate,2,options);
+assert(~gapMetrics.TrialValid);
+assert(any(strcmp(gapMetrics.InvalidReasons,'eye tracker lost the animal')));
+assert(abs(gapMetrics.PursuitGain-1) < 0.05); % no velocity across the gap
 
 missing = perfect;
 missing(:,4:5) = NaN;

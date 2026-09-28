@@ -36,6 +36,9 @@ classdef opticflow < stimuli.stimulus
     dotColours double = []; % precomputed Screen DrawDots colour matrix
     polarityColours double = []; % 3x2 RGB columns: negative, positive endpoint
     neutralColour double = []; % 3x1 RGB neutral point for zero-polarity dots
+    dotType double = 1; % Screen DrawDots type; 1 = anti-aliased (legacy)
+    exactColour logical = false; % square dots, blending off: pixels equal supplied RGB
+    lastBlendFunction cell = {}; % {source,destination} in effect for the last draw
     cachedReplacementX double = [];
     cachedReplacementY double = [];
     trialPlacementReady logical = false;
@@ -172,6 +175,19 @@ classdef opticflow < stimuli.stimulus
       o.fs = repmat(-o.f,o.nDots,1);
       o.zs = zeros(o.nDots, 1);
 
+      if o.exactColour
+        % Anti-aliased edges and alpha blending mix colours in the
+        % framebuffer's (gamma-encoded) space, leaving the calibrated axis.
+        if ~ismember(o.dotType,[0 4])
+          error('opticflow:ExactColourDotType', ...
+            'exactColour requires square, non-anti-aliased dots (dotType 0 or 4).');
+        end
+        if ~isempty(o.polarityColours) && o.dotContrast ~= 1
+          error('opticflow:ExactColourContrast', ...
+            'exactColour requires dotContrast 1; scale contrast in linear space instead.');
+        end
+      end
+
       if o.balancedDots
         nPairs = floor(o.nDots/2);
         o.dotPolarity = [ones(nPairs,1); -ones(nPairs,1); ...
@@ -196,7 +212,11 @@ classdef opticflow < stimuli.stimulus
             error('opticflow:NeutralColour', ...
               'neutralColour must contain three finite RGB values in [0,255].');
           end
-          endpoints = neutral + contrast*(o.polarityColours-neutral);
+          if contrast == 1
+            endpoints = o.polarityColours; % bit-exact calibrated values
+          else
+            endpoints = neutral + contrast*(o.polarityColours-neutral);
+          end
           o.dotColours = repmat(neutral,1,o.nDots);
           o.dotColours(:,o.dotPolarity < 0) = repmat(endpoints(:,1),1,nnz(o.dotPolarity < 0));
           o.dotColours(:,o.dotPolarity > 0) = repmat(endpoints(:,2),1,nnz(o.dotPolarity > 0));
@@ -518,7 +538,6 @@ classdef opticflow < stimuli.stimulus
       %   2 - round, anti-aliased dots (favour quality)
       %   3 - round, anti-aliased dots (built-in shader)
       %   4 - square dots (built-in shader)
-      dotType = 1;
 
       % One batched draw call keeps the online rendering cost closest to
       % the legacy implementation. The colour matrix is built before trial.
@@ -526,8 +545,18 @@ classdef opticflow < stimuli.stimulus
       if size(drawColours,1) == 3
           drawColours = [drawColours;255*ones(1,size(drawColours,2))];
       end
-      Screen('DrawDots',o.winPtr,[o.x(:),o.y(:)]',o.size, ...
-          drawColours,[0,0],dotType);
+      if o.exactColour
+          [oldSource,oldDestination] = Screen('BlendFunction',o.winPtr, ...
+              'GL_ONE','GL_ZERO');
+          Screen('DrawDots',o.winPtr,[o.x(:),o.y(:)]',o.size, ...
+              drawColours,[0,0],o.dotType);
+          [usedSource,usedDestination] = Screen('BlendFunction',o.winPtr, ...
+              oldSource,oldDestination);
+          o.lastBlendFunction = {usedSource,usedDestination};
+      else
+          Screen('DrawDots',o.winPtr,[o.x(:),o.y(:)]',o.size, ...
+              drawColours,[0,0],o.dotType);
+      end
 
     end
 
