@@ -43,21 +43,24 @@ if ~isempty(options.WindowRect)
     S.centerPix = S.screenRect(3:4)/2;
 end
 P.stimDur = options.StimulusSeconds;
-A = marmoview.openScreen(S,struct());
-cleanupScreen = onCleanup(@() sca);
 
+% Read the hardware gamma table before any window exists: on drivers that
+% refuse the query, Psychtoolbox closes all open windows.
 report = struct();
-report.GammaApplication = A.gammaApplication;
-if ~strcmp(A.gammaApplication,'software-encoded empirical device values')
-    error('test_marmoset_phenotype_ptb:GammaPipeline', ...
-        'openScreen added a Psychtoolbox gamma stage for this protocol.');
-end
 try
-    gammaTable = Screen('ReadNormalizedGammaTable',A.window);
+    gammaTable = Screen('ReadNormalizedGammaTable',S.screenNumber);
     identity = linspace(0,1,size(gammaTable,1))';
     report.HardwareGammaMaximumDeviation = max(abs(gammaTable-identity),[],'all');
 catch
     report.HardwareGammaMaximumDeviation = NaN;
+end
+
+A = marmoview.openScreen(S,struct());
+cleanupScreen = onCleanup(@() sca);
+report.GammaApplication = A.gammaApplication;
+if ~strcmp(A.gammaApplication,'software-encoded empirical device values')
+    error('test_marmoset_phenotype_ptb:GammaPipeline', ...
+        'openScreen added a Psychtoolbox gamma stage for this protocol.');
 end
 if isnan(report.HardwareGammaMaximumDeviation)
     if options.RequireHardwareGammaCheck
@@ -114,7 +117,7 @@ while ~isempty(typesToTest) && trialsRun < size(plan.Rows,1)
     while true
         protocol.state_and_screen_update(GetSecs,0,0,{});
         if protocol.FrameCount == options.CaptureFrame && isempty(backColours)
-            back = Screen('GetImage',A.window,[],'backBuffer');
+            back = Screen('GetImage',A.window,[],'drawBuffer');
             backColours = unique(reshape(double(back),[],3),'rows');
         end
         vbl = Screen('Flip',A.window);
@@ -153,8 +156,13 @@ while ~isempty(typesToTest) && trialsRun < size(plan.Rows,1)
         all(polarityCounts([visible(1) visible(1) visible(2) visible(2)]) > 0);
     report.Trials(end+1,1) = item;
     if ~item.Pass
+        strayBack = backColours(~ismember(backColours,allowed,'rows'),:);
+        strayFront = frontColours(~ismember(frontColours,allowed,'rows'),:);
         error('test_marmoset_phenotype_ptb:Framebuffer', ...
-            'Pair %s displayed colours outside the calibrated set.',pair.PairID);
+            ['Pair %s: allowed %s; unexpected back-buffer colours %s; ' ...
+            'unexpected front-buffer colours %s; polarity pixel counts %s.'], ...
+            pair.PairID,mat2str(allowed),mat2str(strayBack(1:min(end,8),:)), ...
+            mat2str(strayFront(1:min(end,8),:)),mat2str(polarityCounts));
     end
 end
 report.Pass = all([report.Trials.Pass]);

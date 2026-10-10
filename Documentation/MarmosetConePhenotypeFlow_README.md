@@ -190,3 +190,8 @@ report = test_marmoset_phenotype_ptb;   % uses the experiment settings
   - Back- and front-buffer pixels are exactly the calibrated colours.
   - Both polarities of every visible field are displayed.
   - Flip timing.
+- Some drivers refuse to report the hardware gamma table (this happened on a development laptop).
+  - The test then fails by default, because a second gamma stage cannot be excluded.
+  - Pass `struct('RequireHardwareGammaCheck',false)` only if you have checked display linearity with a photometer.
+- Verified in an 800 x 600 window on a development laptop (not the rig) with the 2018 LG calibration.
+  - Every displayed pixel was exactly the background or a calibrated endpoint for all four pair types tested.
