@@ -448,6 +448,25 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                %     'ns', Inf, ...           % full integer lattice
                %     'equalStride', false);
 
+           case 15 % Random-phase Fourier hyperplaid on the Hartley lattice
+
+               hp_K = P.hp_K;
+               % [time | K | fx(1:K) | fy(1:K) | phase(1:K) |
+               %  amplitude(1:K) | bankIndex(1:K)]
+               o.NoiseHistory = nan(o.MaxFrame, 1 + 1 + 5*hp_K);
+
+               o.hNoise = stimuli.fourierplaid_procedural(o.winPtr, ...
+                   'screenRect', S.screenRect, ...
+                   'pixPerDeg',  S.pixPerDeg, ...
+                   'frameRate',  S.frameRate, ...
+                   'maxSF',      P.hp_maxSF, ...
+                   'K',          hp_K, ...
+                   'ns',         P.hp_ns, ...
+                   'equalStride', P.equalStride, ...
+                   'contrast',   P.noiseContrast, ...
+                   'updateEveryNFrames', ceil(S.frameRate / P.noiseFrameRate), ...
+                   'bgGrey',     S.bgColour);
+
 
 
        end
@@ -844,6 +863,22 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                      % Write to NoiseHistory (col 1 = time, set after Flip)
                      o.NoiseHistory(o.FrameCount, 2:(1+numel(row))) = row;
 
+                 case 15 % Random-phase Fourier hyperplaid
+                     o.hNoise.afterFrame();
+                     if isfield(o.S,'stereoMode') && o.S.stereoMode>0
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 0);
+                         o.hNoise.beforeFrame();
+                         Screen('SelectStereoDrawBuffer', o.winPtr, 1);
+                         o.hNoise.beforeFrame();
+                     else
+                         o.hNoise.beforeFrame();
+                     end
+
+                     o.FrameCount = o.FrameCount + 1;
+                     row = o.hNoise.currentLogRowNumeric(NaN);
+                     % Timestamp is written after Flip; copy the remainder.
+                     o.NoiseHistory(o.FrameCount, 2:numel(row)) = row(2:end);
+
 
                      
              end
@@ -1101,7 +1136,16 @@ classdef PR_ForageProceduralNoise < protocols.protocol
         PR = struct;
         if isa(o.hNoise, 'stimuli.stimulus')
             PR.hNoise = copy(o.hNoise); % store noise object
-            if isa(o.hNoise, 'stimuli.hartleyplaid_procedural')
+            if isa(o.hNoise, 'stimuli.fourierplaid_procedural')
+                PR.hNoise.bank = []; % lattice is fixed and large
+                PR.NoiseHistorySchema = o.hNoise.schemaVersion;
+                PR.NoiseHistoryFields = { ...
+                    'time', 'K', 'fx', 'fy', 'phaseRad', ...
+                    'amplitude', 'bankIndex'};
+                PR.FourierPhaseConvention = o.hNoise.phaseConvention;
+                PR.FourierRngSeed = o.hNoise.trialSeed;
+                PR.FourierRngInitialState = o.hNoise.trialInitialState;
+            elseif isa(o.hNoise, 'stimuli.hartleyplaid_procedural')
                 PR.hNoise.bank = []; %too big to store everything on every trial. (not unique to trials)
             end
         end
