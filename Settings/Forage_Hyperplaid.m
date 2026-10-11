@@ -114,11 +114,11 @@ P.noisetype = 8; % this corresponds to what PR_ForageProceduralNoise does
 S.noisetype = 'Cannot change during protocol';
 
 % --- Hyperplaid defaults (case 10) ---
-P.noisetype        = 10;      % choose Hyperplaid
+P.noisetype        = 14;      % choose Hyperplaid
 
 switch P.noisetype
         
-    case 10 % Hyperplaid
+    case 14 % Hyperplaid
 %         P.numDir = 1;
 %         S.numDir = 'Number of directions to draw from:';
 % 
@@ -161,15 +161,33 @@ switch P.noisetype
 %         S.RandPhase = 'Randomize grating phase (1 or 0):';
 
 
-        P.noiseFrameRate   = 5;       % Hz (200 ms static frames)
-        P.noiseContrast    = 0.4;     % overall RMS target (scaled per component)
-        P.noiseorinum      = 6;       % orientations (0:30:150)
-        P.orioffset        = 0;       % degrees, optional
-        P.spfnum           = 5;       % number of spatial frequencies
-        P.spfmin           = 1.5;     % cpd (min)
-        P.spfmax           = 6;       % cpd (max)
-        P.hp_K             = 6;       % components per frame
-        P.hp_M             = 8;       % phase bins per component
+        % --- Hyperplaid (tight rectangular Hartley sublattice) ---
+        P.noisetype        = 14;
+        
+        % Display / stimulus
+        P.noiseFrameRate   = 5;        S.noiseFrameRate   = 'Noise update rate (Hz):';
+        P.noiseContrast    = 0.40;     S.noiseContrast    = 'Noise RMS contrast:';
+        P.hp_K             = 6;        S.hp_K             = 'Components per frame:';
+        
+        % Tight grid controls
+        P.hp_maxSF         = 8;        S.hp_maxSF         = 'Max spatial freq (cyc/deg):';
+        P.hp_ns            = 25;       S.hp_ns            = 'Grid points per axis (odd):';
+        
+        % (Optional) override: leave empty to auto-pick from ns/maxSF
+        P.hp_strideKx      = [];       S.hp_strideKx      = 'Stride kx (leave empty for auto):';
+        P.hp_strideKy      = [];       S.hp_strideKy      = 'Stride ky (leave empty for auto):';
+
+
+
+        P.noiseFrameRate   = 60;      S.noiseFrameRate  = 'Hz (200 ms static frames)';
+        P.noiseContrast    = 0.4;     S.noiseContrast   = 'overall RMS target (scaled per component)';
+        P.noiseorinum      = 6;       S.noiseorinum     = 'orientations (0:30:150)';
+        P.orioffset        = 0;       S.orioffset       = 'degrees, optional';
+        P.spfnum           = 5;       S.spfnum          = 'number of spatial frequencies';
+        P.spfmin           = 1.5;     S.spfmin          = 'cpd (min)';
+        P.spfmax           = 6;       S.spfmax          = 'cpd (max)';
+        P.hp_K             = 6;       S.hp_K            = 'components per frame';
+        P.hp_M             = 8;       S.hp_M            = 'phase bins per component';
         
         % Optional probe mode (Δφ sweep for selected pairs)
         P.hp_probeMode         = false;

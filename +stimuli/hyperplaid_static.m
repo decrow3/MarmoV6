@@ -1,62 +1,61 @@
 classdef hyperplaid_static < stimuli.stimulus
-% Full-field static hyperplaid: sum of K gratings per frame (no drift).
-% Uses PTB's procedural sine shader. Designed for Hartley-first workflows.
+% Full-field static Hartley Hyperplaid (K gratings/frame, no drift).
+% Pixel-accurate: each lattice atom is pre-rendered to a texture with
+% known [fx, fy] in cycles/deg. No per-draw rotations are used.
 %
-% NoiseHistory row layout (numeric):
-%   [ t, K, fx(1:K), fy(1:K), phiSent(1:K), amp, idx(1:K) ]
-% where:
-%   t         : flip timestamp (VBL or your photodiode-aligned time)
-%   K         : number of components that frame (scalar, usually obj.K)
-%   fx, fy    : cycles/deg per component (post-sampling)
-%   phiSent   : phase (radians) actually sent to the shader for each component
-%   amp       : per-component amplitude (contrast/sqrt(K)), scalar per frame
-%   idx       : indices into the prebuilt lattice bank (for Hartley mode)
+% Per-frame log row (numeric):
+%   [t, K, fx(1:K), fy(1:K), amp(1:K), idx(1:K)]
 %
-% Analysis tip: build complex features with gaze correction per frame
-%   phi_ret = phiSent + 2*pi*(fx*dx + fy*dy);
-%   z       = amp .* exp(1i * phi_ret);
+% Analysis tip (gaze correction per frame):
+%   phi_ret = phiSent + 2*pi*(fx*dx + fy*dy);  z = amp .* exp(1i*phi_ret);
+% no longer using phiSent, all phases are baked into textures as =pi/4
+% I(x,y) = bgGrey + sum_j( amp(j) * sin( 2*pi*(fx(idx(j))*X + fy(idx(j))*Y) + pi/4 ) )
 
     properties
         % --- display ---
         winPtr
         screenRect
         pixPerDeg
-        bgGrey = 127;                  % mean luminance (0..255)
+        bgGrey = 0.5;
+        linearize = true
 
-        % --- bank / design ---
-        orientations_deg double        % used in cos-sin mode (size O)
-        spatialFrequencies_cpd double  % used in cos-sin mode (size S)
-        K double = 6                   % components per frame
-        M double = 8                   % phase alphabet size (cos-sin mode)
-        phaseAlphabet double           % (1×M) radians
-        contrast double = 0.4          % RMS target per frame (scaled internally)
+        % --- design ---
+        maxSF double = 8
+        spatialFrequencies_cpd double = 3 * 2.^linspace(-1,1,5)  % kept for convenience
+        K double = 6
+        contrast double = 0.4
 
         % --- timing ---
-        frameRate double
-        updateEveryNFrames double      % e.g., ceil(frameRate / 5) for ~5 Hz holds
+        frameRate double = 60
+        updateEveryNFrames double = []
 
         % --- geometry ---
-        position double = []           % center [x y] in pixels (unused for full-field)
-        diameter double = inf          % inf = full field (aperture only used in getImage)
+        position double = []
+        diameter double = inf
 
-        % --- state ---
-        %rng                             % RandStream
-        frameUpdate double = 0
-        tex                             % procedural sine grating handle
-        current                         % struct: idx, fx, fy, sf, ori, phi, phiSent, amp
-
-        % --- probe mode (optional) ---
-        probeMode logical = false
-        probePairs double = []          % [i j] indices into carrier list (linearized O×S)
-        probeDeltaPhases double = []    % vector of Δφ values (radians), length M by default
-        probeCursor double = 1
-
-        % --- basis control ---
-        basisMode char = 'hartley'      % 'hartley' | 'cos-sin'
+        % --- Hartley lattice parameters (TIGHT rectangular sublattice) ---
         useHartleyLattice logical = true
-        hartleyKmax double = []         % integer-cycle radius (auto if empty)
-        uniquePerFrame logical = true   % sample without replacement when true
-        bank                            % struct array from buildBank()
+        hartleyKmax double = []              % (unused in new mode; kept for back-compat)
+        
+        % NEW / CHANGED:
+        FmaxX_cpd double = 8                 % rectangular cap in cyc/deg (|fx|<=FmaxX)
+        FmaxY_cpd double = 8                 % rectangular cap in cyc/deg (|fy|<=FmaxY)
+        strideKx double = 32                 % choose sx, sy; sx/sy ≈ Wdeg/Hdeg
+        strideKy double = 18
+
+        uniquePerFrame logical = true
+        bank
+        texHandles
+        bankReady logical = false
+
+        % --- runtime state ---
+        frameUpdate double = 0
+        current
+        %rng, don't set here, its inherited from the stimuli.stimulus class
+
+        oldmaximumvalue
+        oldclampcolors 
+        oldapplyToDoubleInputMakeTexture
     end
 
     methods
@@ -64,128 +63,159 @@ classdef hyperplaid_static < stimuli.stimulus
             obj = obj@stimuli.stimulus();
             obj.winPtr = winPtr;
 
+            % NEEDS DISABLED CLAMPING OR TWICE AS MANY TEXTURES 
+            % Use OpenGL’s native [0..1] color range and DISABLE clamping:
+            [obj.oldmaximumvalue, obj.oldclampcolors, obj.oldapplyToDoubleInputMakeTexture]=Screen('ColorRange', winPtr, 1, 0);
+
             ip = inputParser();
-            % display
             ip.addParameter('screenRect', []);
             ip.addParameter('pixPerDeg', 60);
             ip.addParameter('frameRate', 60);
-            % bank choices for cos-sin mode
-            ip.addParameter('orientations', 0:30:150);
-            ip.addParameter('spatialFrequencies', 3*2.^linspace(-1,1,5)); % cpd
-            % core stimulus
-            ip.addParameter('K', 6);
-            ip.addParameter('M', 8);
-            ip.addParameter('contrast', 0.4);
+            ip.addParameter('spatialFrequencies', obj.spatialFrequencies_cpd);
+            ip.addParameter('K', obj.K);
+            ip.addParameter('contrast', obj.contrast);
             ip.addParameter('updateEveryNFrames', []);
-            % probes
-            ip.addParameter('probeMode', false);
-            ip.addParameter('probePairs', []);
-            ip.addParameter('probeDeltaPhases', []);
-            % basis / lattice
-            ip.addParameter('basisMode', 'hartley');
             ip.addParameter('useHartleyLattice', true);
             ip.addParameter('hartleyKmax', []);
+            % NEW / CHANGED:
+            ip.addParameter('maxSF', obj.maxSF);
+
             ip.addParameter('uniquePerFrame', true);
+            ip.addParameter('bgGrey', obj.bgGrey);
+            ip.addParameter('linearize', true);
 
             ip.parse(varargin{:});
 
             obj.screenRect             = ip.Results.screenRect;
             obj.pixPerDeg              = ip.Results.pixPerDeg;
             obj.frameRate              = ip.Results.frameRate;
-            obj.orientations_deg       = ip.Results.orientations;
             obj.spatialFrequencies_cpd = ip.Results.spatialFrequencies;
             obj.K                      = ip.Results.K;
-            obj.M                      = ip.Results.M;
             obj.contrast               = ip.Results.contrast;
-            obj.probeMode              = ip.Results.probeMode;
-            obj.probePairs             = ip.Results.probePairs;
-            obj.probeDeltaPhases       = ip.Results.probeDeltaPhases;
-            obj.basisMode              = ip.Results.basisMode;
             obj.useHartleyLattice      = ip.Results.useHartleyLattice;
             obj.hartleyKmax            = ip.Results.hartleyKmax;
+            % NEW / CHANGED:
+            obj.FmaxX_cpd              = ip.Results.maxSF;
+            obj.FmaxY_cpd              = ip.Results.maxSF;
+
+
             obj.uniquePerFrame         = ip.Results.uniquePerFrame;
+            obj.bgGrey                 = 0.5;%ip.Results.bgGrey;
+            obj.linearize              = ip.Results.linearize;
 
             if isempty(ip.Results.updateEveryNFrames)
-                obj.updateEveryNFrames = ceil(obj.frameRate / 5); % ~5 Hz holds
+                obj.updateEveryNFrames = ceil(obj.frameRate/60); % ~5 Hz
             else
                 obj.updateEveryNFrames = ip.Results.updateEveryNFrames;
             end
 
-            obj.phaseAlphabet = (0:obj.M-1) * (2*pi/obj.M);
-            if isempty(obj.probeDeltaPhases)
-                obj.probeDeltaPhases = obj.phaseAlphabet;
-            end
 
-            % RNG, inherits from stimulus class
-            %obj.rng = RandStream('mt19937ar','Seed',sum(100*clock));
+            Wdeg =  (obj.screenRect(3)-obj.screenRect(1)) / obj.pixPerDeg;%51.344; 
+            Hdeg =  (obj.screenRect(4)-obj.screenRect(2)) / obj.pixPerDeg;%28.881;
 
-            % Build lattice bank if requested
-            if obj.useHartleyLattice
-                obj.bank = obj.buildBank();
-            else
-                obj.bank = [];
-            end
+            [sx, sy, info] = pickHartleyStridesFromNs(Wdeg, Hdeg, obj.FmaxX_cpd, obj.FmaxY_cpd, 25);
+            obj.strideKx = sx; obj.strideKy = sy;
+            fprintf('Strides picked: sx=%d, sy=%d, nx=%d, ny=%d, N=%d, fx_step=%.3f, fy_step=%.3f\n', ...
+                sx, sy, info.nx, info.ny, info.N_total, info.fx_step, info.fy_step);
 
-            % PTB procedural sine with zero base color (we draw bg once)
-            w = RectWidth(obj.screenRect);
-            h = RectHeight(obj.screenRect);
-            obj.tex = CreateProceduralSineGrating(obj.winPtr, w, h, [0 0 0 0]);
+            obj.bank = obj.buildBank();            % NEW sublattice
+            obj.texHandles = obj.buildTextures();  % pre-render
+            obj.bankReady = true;
         end
 
         function bank = buildBank(obj)
-            % Build lattice of integer cycles across the full field.
             Wdeg = RectWidth(obj.screenRect)/obj.pixPerDeg;
             Hdeg = RectHeight(obj.screenRect)/obj.pixPerDeg;
 
-            if isempty(obj.hartleyKmax)
-                nxmax = floor(Wdeg * max(obj.spatialFrequencies_cpd));
-                nymax = floor(Hdeg * max(obj.spatialFrequencies_cpd));
-            else
-                nxmax = obj.hartleyKmax;
-                nymax = obj.hartleyKmax;
-            end
-            [NX, NY] = ndgrid(-nxmax:nxmax, -nymax:nymax);
-            keep = ~(NX==0 & NY==0);    % drop DC (optional)
-            NX = NX(keep); NY = NY(keep);
+            % Integer-cycle bounds from rectangular cap (in cycles/deg):
+            Kx_max = floor(Wdeg * obj.FmaxX_cpd);
+            Ky_max = floor(Hdeg * obj.FmaxY_cpd);
 
-            fx = NX / Wdeg;             % cycles/deg
-            fy = NY / Hdeg;
+            % Even stride sublattice including zeros; we'll drop DC and canonicalize:
+            kx_vals = -Kx_max:obj.strideKx:Kx_max;
+            ky_vals = -Ky_max:obj.strideKy:Ky_max;
+
+            [KX, KY] = ndgrid(kx_vals, ky_vals);
+            KX = KX(:); KY = KY(:);
+
+            % Drop DC only:
+            keep = ~(KX==0 & KY==0);
+            KX = KX(keep); KY = KY(keep);
+
+            % ---- Step 1: pick a canonical half-plane to avoid ±k duplicates
+            keepHalf = (KX > 0) | (KX==0 & KY > 0);
+            KXh = KX(keepHalf); KYh = KY(keepHalf);          % half-plane reps only
+
+            % ---- Step 2: append their negatives to get full plane (+k and −k)
+            KXp = [ KXh ; -KXh ];
+            KYp = [ KYh ; -KYh ];
+
+            % Visual units (cycles/deg):
+            fx = KXp / Wdeg;
+            fy = KYp / Hdeg;
+
             sf = hypot(fx, fy);
             th = atan2(fy, fx);
 
-            % keep lattice points within requested SF band
-            sfInBand = sf >= min(obj.spatialFrequencies_cpd) & sf <= max(obj.spatialFrequencies_cpd);
-            fx = fx(sfInBand); fy = fy(sfInBand); sf = sf(sfInBand); th = th(sfInBand);
+            % ---- Step 3: build opposite-index map (pairing +k <-> −k)
+            nH = numel(KXh);
+            opp = [(nH+1):(2*nH), 1:nH]';   % opp(i) gives partner row for i
+            % NB: indices 1..nH are +k half-plane, (nH+1)..2nH are their negatives.
 
-            % half-plane representative to avoid ±k redundancy
-            keepHalf = (fx>0) | (fx==0 & fy>0);
-            fx = fx(keepHalf); fy = fy(keepHalf); sf = sf(keepHalf); th = th(keepHalf);
-
-            bank = struct('fx', num2cell(fx), 'fy', num2cell(fy), ...
-                          'sf', num2cell(sf), 'th', num2cell(th), ...
-                          'ori', num2cell(rad2deg(mod(th, 2*pi))));
+            % Build struct bank and store the partner index:
+            bank = struct('fx', num2cell(fx), ...
+                'fy', num2cell(fy), ...
+                'sf', num2cell(sf), ...
+                'th', num2cell(th), ...
+                'ori', num2cell(rad2deg(mod(th, 2*pi))), ...
+                'opp', num2cell(opp));
         end
 
-        function [idx, fx, fy, phi] = sampleHartley(obj)
-            % Draw K lattice atoms (half-plane). Hartley phase is -π/4; random sign via +π.
-            C = numel(obj.bank);
-            if obj.uniquePerFrame
-                idx = randperm(obj.rng, C, obj.K);
-            else
-                idx = randi(obj.rng, C, [1 obj.K]);
-            end
-            fx  = arrayfun(@(i) obj.bank(i).fx, idx);
-            fy  = arrayfun(@(i) obj.bank(i).fy, idx);
+        function texHandles = buildTextures(obj)
+            % Precompute uint8 textures for each Hartley atom:
+            % I(x,y) = sin(2π (fx X + fy Y) - π/4), mean ~127
+            w = RectWidth(obj.screenRect);
+            h = RectHeight(obj.screenRect);
 
-            phi = -pi/4 * ones(1, obj.K);                % Hartley cas phase
-            flips = randi(obj.rng, 2, [1 obj.K])*2 - 3;  % {-1,+1}
-            phi(flips<0) = phi(flips<0) + pi;            % random sign folded into phase
+            [xPix, yPix] = meshgrid( (1:w) - (w+1)/2, ...
+                                     (1:h) - (h+1)/2 );
+            
+            Xdeg =  xPix / obj.pixPerDeg;
+            Ydeg = -yPix / obj.pixPerDeg;
+
+            nC = numel(obj.bank);
+            texHandles = zeros(1, nC);
+
+            for c = 1:nC
+                fx = obj.bank(c).fx; fy = obj.bank(c).fy;
+                
+%                 if sign(fx)>0&&sign(fy)>0
+                    phase = 2*pi*(fx.*Xdeg + fy.*Ydeg) + pi/4;  % Hartley cas for +k
+%                 elseif sign(fx)<0&&sign(fy)<0
+%                     phase = 2*pi*(fx.*Xdeg + fy.*Ydeg) + pi/4;  % Hartley cas for -k
+%                 end
+
+%                 Iu8 = uint8(round(127 + 127 * sin(phase)));
+%                 texHandles(c) = Screen('MakeTexture', obj.winPtr, Iu8, 0, 0);
+
+                % Build (mean-zero, signed) once:
+                dev = (sin(phase));                        % [-1, +1]
+ %                explicit cas form, mean-zero
+%                 dev = (cos(phase) + sin(phase)) / sqrt(2); 
+                
+                texHandles(c) = Screen('MakeTexture', obj.winPtr, dev, 0, [], 1);     % floatprecision=1 (fp16 / signed-int)
+            end
         end
 
         function beforeTrial(obj)
             obj.setRandomSeed();
             obj.frameUpdate = 0;
-            obj.sampleComponents(); % prime first frame
+            if ~obj.bankReady
+                obj.bank = obj.buildBank();
+                obj.texHandles = obj.buildTextures();
+                obj.bankReady = true;
+            end
+            obj.sampleComponents();
         end
 
         function reset(obj)
@@ -195,219 +225,257 @@ classdef hyperplaid_static < stimuli.stimulus
         end
 
         function sampleComponents(obj)
-            if strcmp(obj.basisMode,'hartley')
-                [idx, fx, fy, phi] = obj.sampleHartley();
+            C = numel(obj.bank)/2; %??? might need to update after spliting
 
-                % Orientation/SF for drawing/logging
-                sf  = hypot(fx, fy);
-                ori = rad2deg(mod(atan2(fy, fx), 2*pi));
-
-                % Optional probe: enforce Δφ on first pair (temporary non-Hartley)
-                if obj.probeMode && ~isempty(obj.probePairs)
-                    dphi = obj.probeDeltaPhases( mod(obj.probeCursor-1, numel(obj.probeDeltaPhases)) + 1 );
-                    obj.probeCursor = obj.probeCursor + 1;
-                    % choose a random phase on the alphabet and enforce Δφ
-                    phi(1) = obj.phaseAlphabet(randi(obj.rng, obj.M));
-                    phi(2) = phi(1) + dphi;
-                end
-
-                obj.current.idx     = idx;
-                obj.current.fx      = fx;
-                obj.current.fy      = fy;
-                obj.current.sf      = sf;
-                obj.current.ori     = ori;
-                obj.current.phi     = phi;                         % design phase (for your reference)
-                obj.current.phiSent = phi;                         % actually sent to shader
-                obj.current.amp     = obj.contrast / sqrt(max(obj.K,1));
-
+            if obj.uniquePerFrame
+                baseIdx = randperm(obj.rng, C, obj.K);
             else
-                % cos-sin mode on a user grid (O×S). Also compute fx/fy for logging.
-                O = numel(obj.orientations_deg);
-                S = numel(obj.spatialFrequencies_cpd);
-                C = O*S;
-
-                idx = randperm(obj.rng, C, obj.K);
-                [oi, si] = ind2sub([O S], idx);
-                ori = obj.orientations_deg(oi);
-                sf  = obj.spatialFrequencies_cpd(si);
-
-                th  = deg2rad(ori);
-                fx  = sf .* cos(th);
-                fy  = sf .* sin(th);
-
-                phi = obj.phaseAlphabet(randi(obj.rng, obj.M, [1 obj.K]));
-                sgn = randi(obj.rng, 2, [1 obj.K])*2 - 3;          % {-1,+1}
-                phiSent = phi;
-                phiSent(sgn<0) = phiSent(sgn<0) + pi;              % fold sign into phase
-
-                % Optional Δφ probe on first pair
-                if obj.probeMode && ~isempty(obj.probePairs)
-                    p    = obj.probePairs( mod(obj.probeCursor-1, size(obj.probePairs,1)) + 1, : );
-                    dphi = obj.probeDeltaPhases( mod(obj.probeCursor-1, numel(obj.probeDeltaPhases)) + 1 );
-                    obj.probeCursor = obj.probeCursor + 1;
-
-                    % ensure both members of the pair are in set; if not, replace first two
-                    idx(1:2) = p(:)';
-                    [oi, si] = ind2sub([O S], idx);
-                    ori = obj.orientations_deg(oi);
-                    sf  = obj.spatialFrequencies_cpd(si);
-                    th  = deg2rad(ori);
-                    fx  = sf .* cos(th);
-                    fy  = sf .* sin(th);
-
-                    phi       = obj.phaseAlphabet(randi(obj.rng, obj.M, [1 obj.K]));
-                    phiSent   = phi;
-                    phiSent(1) = obj.phaseAlphabet(randi(obj.rng, obj.M));
-                    phiSent(2) = phiSent(1) + dphi;
-                end
-
-                obj.current.idx     = idx;
-                obj.current.fx      = fx;
-                obj.current.fy      = fy;
-                obj.current.sf      = sf;
-                obj.current.ori     = ori;
-                obj.current.phi     = phi;
-                obj.current.phiSent = phiSent;
-                obj.current.amp     = obj.contrast / sqrt(max(obj.K,1));
+                baseIdx = randi(obj.rng, C, [1 obj.K]);
             end
+
+            % With 50% chance, flip to the −k partner (sets the Hartley phase by +π/2):
+            flip_K = rand(obj.rng, 1, obj.K) > 0.5;      % logical
+            
+            %idx(flip_K) = obj.bank(idx(flip_K)).opp;   % use −k when flip=1
+            %flip_K=zeros(1,obj.K)==1;
+            Idx=baseIdx;
+            Idx(flip_K) = arrayfun(@(i) obj.bank(i).opp, baseIdx(flip_K));
+            
+            %fx and fy pull from the full bank, flipped are already -fx,-fy
+            fx = arrayfun(@(i) obj.bank(i).fx, Idx);
+            fy = arrayfun(@(i) obj.bank(i).fy, Idx);
+
+            %50-50 pull for amplitude flip (180 out of phase)
+            flip_amp = rand(obj.rng,1,obj.K) > 0.5;                 % 0:+, 1:−
+            signA    = 1 - 2*double(flip_amp);                      % +1 or −1
+
+            sf  = hypot(fx, fy);
+            ori = rad2deg(mod(atan2(fy, fx), 2*pi));
+
+            %phiSent = -pi/4 * ones(1, obj.K);
+            %Phase bookkeeping, its +pi/4 by default but the flipped need
+            %-pi/4
+%             phaseLUT = [pi/4, -pi/4];
+            phaseLUT = pi/4 * ones(1,obj.K);
+
+            %Negative K, with negative amplitude gives you back the
+            %quadrature pair, so ~(+k,+pi/4)
+
+            obj.current.idx     = Idx;
+            obj.current.fx      = fx;
+            obj.current.fy      = fy;
+            obj.current.sf      = sf;
+            obj.current.ori     = ori;
+            obj.current.phase  = phaseLUT;%phaseLUT(1+double(flip_K));        % 0 = +k (−π/4), 1 = −k (−3π/4)
+            obj.current.amp  = double(signA)*obj.contrast / sqrt(max(obj.K,1));
+%             obj.current.flip_K= double(flip_K);
+%             obj.current.flip_amp= double(flip_amp);
 
             obj.frameUpdate = obj.updateEveryNFrames;
         end
 
         function beforeFrame(obj)
-            % Draw background ONCE
             Screen('FillRect', obj.winPtr, obj.bgGrey);
-
-            % Additive blend for components
             Screen('BlendFunction', obj.winPtr, GL_ONE, GL_ONE);
 
-            rect = obj.screenRect;
-            for j = 1:obj.K
-                angDeg = obj.current.ori(j);
-                sf_cpp = obj.current.sf(j) / obj.pixPerDeg;   % cycles/pixel
-                phi    = obj.current.phiSent(j);
-                aux    = [phi, sf_cpp, obj.current.amp, 1];   % [phase(rad), freq(cpp), contrast, aspect]
-                %kPsychDontDoRotation off
-                Screen('DrawTexture', obj.winPtr, obj.tex, [], rect, angDeg, [], [], [], [], [], aux);
-            end
+ %Loop draw         
+%             rect = obj.screenRect;
+%             for j = 1:obj.K
+%                 tj = double(obj.texHandles(obj.current.idx(j)));
+% 
+%                 % Modulating color option
+%                 %                 scale = obj.current.amp(j) * 255;
+%                 %                 Screen('DrawTexture', obj.winPtr, tj, [], rect, 0, [], [], [scale scale scale 1]);  % one pass per atom
+%                 
+%                 scale = obj.current.amp(j);
+%                  Screen('DrawTexture', obj.winPtr, tj, [], rect, 0, [], [], [scale scale scale 1]);
+%             end
 
-            % Restore normal alpha blending
+            %This should work, but doesn't
+            scalevect = obj.current.amp';
+            dst = repmat(obj.screenRect(:), 1, obj.K);  % 4×K
+            Screen('DrawTextures', obj.winPtr, double(obj.texHandles(obj.current.idx)), [], dst, 0, [], [], [scalevect scalevect scalevect ones(size(scalevect))]');
+            
+            %Put blending back on the shelf for the next person to use it
             Screen('BlendFunction', obj.winPtr, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         end
 
         function afterFrame(obj)
-            % Count down; when it hits 0, sample next set
             obj.frameUpdate = obj.frameUpdate - 1;
             if obj.frameUpdate <= 0
                 obj.sampleComponents();
             end
         end
 
-        function updateTextures(obj, varargin) %#ok<INUSD>
-            % procedural sine has nothing to precompute
-        end
-
         function CloseUp(obj)
-            if ~isempty(obj.tex)
-                Screen('Close', obj.tex); obj.tex = [];
+            if ~isempty(obj.texHandles)
+                for k = 1:numel(obj.texHandles)
+                    if obj.texHandles(k) > 0
+                        Screen('Close', obj.texHandles(k));
+                    end
+                end
             end
+            obj.texHandles = [];
+            obj.bankReady = false;
+
+            % Return screen to previous condition
+            Screen('ColorRange', obj.winPtr, obj.oldmaximumvalue, obj.oldclampcolors, obj.oldapplyToDoubleInputMakeTexture);
         end
 
-        function I = getImage(obj, rect, binSize) %#ok<INUSL>
-        % CPU renderer for the *current* components; matches shader if the
-        % window is linearized and background is drawn once per frame.
-        %
-        % Inputs:
-        %   rect     [l t r b] crop in window pixels (default: full screenRect)
-        %   binSize  integer downsample factor via box-averaging (default: 1)
+        function I = getImage(obj, rect, binSize)
             if nargin < 2 || isempty(rect),    rect = obj.screenRect; end
             if nargin < 3 || isempty(binSize), binSize = 1; end
 
-            % sizes & center
             w = RectWidth(obj.screenRect);
             h = RectHeight(obj.screenRect);
-            cx = (obj.screenRect(1) + obj.screenRect(3)) / 2;
-            cy = (obj.screenRect(2) + obj.screenRect(4)) / 2;
-            if ~isempty(obj.position)
-                cx = obj.position(1);
-                cy = obj.position(2);
-            end
 
-            % pixel grid (y up in degrees)
-            [xPix, yPix] = meshgrid( (1:w) + obj.screenRect(1) - cx, ...
-                                     (1:h)' + obj.screenRect(2) - cy );
+            [xPix, yPix] = meshgrid( (1:w) - (w+1)/2, ...
+                         (1:h) - (h+1)/2 );
             Xdeg =  xPix / obj.pixPerDeg;
             Ydeg = -yPix / obj.pixPerDeg;
 
-            % optional aperture (analysis uses full-field; renderer keeps parity)
-            if isfinite(obj.diameter)
-                rDeg  = (obj.diameter / obj.pixPerDeg) / 2;   % radius in deg
-                maskA = (Xdeg.^2 + Ydeg.^2) <= rDeg^2;
-            else
-                maskA = true(h, w);
-            end
-
-            % sum K components (use fx/fy if available; fallback to ori/sf)
             acc = zeros(h, w, 'double');
+
+            %Flips indicate tiling phase by pi/2,
+            %             phi = [-π/4, +π/4]
+            %             sgn = [+1,-1]
+
+            %We are making our quad pairs (phi = pi/4) by -k and -amplitude,
+            % so we don't want/need to also change the phase
+            %phi =(obj.current.phase); leaving in a per component phase for
+            %testing
+
             for j = 1:obj.K
-                if isfield(obj.current,'fx')
-                    fx = obj.current.fx(j); fy = obj.current.fy(j);
-                else
-                    th = deg2rad(obj.current.ori(j)); sf = obj.current.sf(j);
-                    fx = sf*cos(th); fy = sf*sin(th);
-                end
-                phi   = obj.current.phiSent(j);
-                phase = 2*pi*(fx.*Xdeg + fy.*Ydeg) + phi;
-                acc   = acc + sin(phase);                      % PTB shader draws sine
+                fx = obj.current.fx(j); fy = obj.current.fy(j);
+                %                 s = phaseLUT(obj.current.phase2(j)+1);
+                phi =(obj.current.phase(j));
+                %acc = acc + sin( 2*pi*(fx.*Xdeg + fy.*Ydeg) + pi/2 );
+                acc = acc + sin( 2*pi*(fx.*Xdeg + fy.*Ydeg)+phi)*(obj.current.amp(j));
             end
 
-            % amplitude + background (once)
-            Ilin = (double(obj.bgGrey)/255) + obj.current.amp * acc;
-            Ilin(~maskA) = double(obj.bgGrey)/255;
+            Ilin = obj.bgGrey+acc; %(double(127)/255) + acc;
             Ilin = min(max(Ilin, 0), 1);
 
-            % crop
             L = max(1, round(rect(1) - obj.screenRect(1) + 1));
             T = max(1, round(rect(2) - obj.screenRect(2) + 1));
             R = min(w, round(rect(3) - obj.screenRect(1)));
             B = min(h, round(rect(4) - obj.screenRect(2)));
             Ilin = Ilin(T:B, L:R);
 
-            % optional downsample
             if binSize > 1
                 Ilin = localBoxDownsample(Ilin, binSize);
             end
-
             I = uint8(round(Ilin * 255));
         end
 
         function row = currentLogRowNumeric(obj, whenTimestamp)
-        % Return a single numeric row for NoiseHistory:
-        %   [ t, K, fx(1:K), fy(1:K), phiSent(1:K), amp, idx(1:K) ]
             if nargin<2, whenTimestamp = NaN; end
             t   = double(whenTimestamp);
             K   = double(obj.K);
             fx  = double(obj.current.fx(:)).';
             fy  = double(obj.current.fy(:)).';
-            ph  = double(obj.current.phiSent(:)).';
+            %ph  = double(obj.current.phase(:)).';
             amp = double(obj.current.amp);
-            if isfield(obj.current,'idx')
-                idx = double(obj.current.idx(:)).';
-            else
-                idx = double(zeros(1, obj.K)); % 0 if not using lattice bank
-            end
-            row = [t, K, fx, fy, ph, amp, idx];
+            idx = double(obj.current.idx(:)).';
+            row = [t, K, fx, fy, amp, idx]; 
         end
     end
 end
 
 function J = localBoxDownsample(A, s)
-% Box-average downsample by integer factor s (no toolboxes).
     [h,w] = size(A);
     hh = floor(h/s)*s; ww = floor(w/s)*s;
-    if hh ~= h || ww ~= w
-        A = A(1:hh, 1:ww);
-    end
+    if hh ~= h || ww ~= w, A = A(1:hh, 1:ww); end
     A = reshape(A, s, hh/s, s, ww/s);
     J = squeeze(mean(mean(A, 1), 3));
 end
+
+
+function [sx, sy, out] = pickHartleyStridesFromNs(Wdeg, Hdeg, FmaxX, FmaxY, ns)
+% Pick integer strides (sx, sy) for a tight rectangular Hartley sublattice
+% such that nx = ny = ns exactly, where
+%   nx = 2*floor(Kx_max/sx) + 1,  ny = 2*floor(Ky_max/sy) + 1.
+%
+% Inputs
+%   Wdeg, Hdeg : field of view (deg)
+%   FmaxX, FmaxY : rectangular bandlimit (|fx|<=FmaxX, |fy|<=FmaxY) in cyc/deg
+%   ns        : desired points per axis (including zero), must be odd, >=3
+%
+% Outputs
+%   sx, sy    : integer strides
+%   out       : struct with details
+
+    arguments
+        Wdeg (1,1) double {mustBePositive}
+        Hdeg (1,1) double {mustBePositive}
+        FmaxX (1,1) double {mustBePositive}
+        FmaxY (1,1) double {mustBePositive}
+        ns (1,1) double {mustBeInteger, mustBeGreaterThanOrEqual(ns,3)}
+    end
+
+    if mod(ns,2)==0
+        error('ns must be odd (includes DC). Example: ns=25 gives a 25x25 grid.');
+    end
+
+    % Integer-cycle bounds
+    Kx_max = floor(Wdeg * FmaxX);
+    Ky_max = floor(Hdeg * FmaxY);
+
+    % Feasibility: maximum ns per axis is 2*K_max+1 (stride=1)
+    ns_max_x = 2*Kx_max + 1;
+    ns_max_y = 2*Ky_max + 1;
+    ns_max   = min(ns_max_x, ns_max_y);
+    if ns > ns_max
+        error('ns=%d not feasible (max %d for given W/H and FmaxX/Y).', ns, ns_max);
+    end
+
+    m = (ns - 1)/2;   % desired floor(K_max/s) on each axis
+
+    % Stride must satisfy: floor(Kx_max/sx) = m  and  floor(Ky_max/sy) = m.
+    % That implies open/closed intervals:
+    %   K_max/(m+1) < s <= K_max/m
+    x_lo = floor(Kx_max / (m+0));   % upper bound (inclusive)
+    x_hi = floor((Kx_max) / (m+1)); % lower bound strict, we'll +1 later
+    y_lo = floor(Ky_max / (m+0));
+    y_hi = floor((Ky_max) / (m+1));
+
+    % Build integer candidate sets respecting (K/(m+1), K/m]
+    sx_cand = (max(1,y_hi)+0); %#ok<NASGU> % dummy to keep editor quiet
+    sx_cand = ( (floor(Kx_max/(m+1))+1) : x_lo );
+    sy_cand = ( (floor(Ky_max/(m+1))+1) : y_lo );
+
+    if isempty(sx_cand) || isempty(sy_cand)
+        error('No integer strides satisfy nx=ny=ns. Try smaller ns.');
+    end
+
+    % Pick (sx,sy) whose ratio best matches Wdeg/Hdeg (≈ isotropic spacing in cyc/deg)
+    rho_des = Wdeg / Hdeg;
+    best = struct('sx',NaN,'sy',NaN,'ratioErr',Inf);
+    for sx_try = sx_cand
+        % sy that gets close in ratio
+        sy_ideal = round(sx_try / rho_des);
+        for sy_try = unique([sy_ideal-1 sy_ideal sy_ideal+1 sy_cand])  % check a few near-ideal + full set
+            if sy_try < min(sy_cand) || sy_try > max(sy_cand), continue; end
+            ratioErr = abs( (sx_try/sy_try) - rho_des ) / rho_des;
+            if ratioErr < best.ratioErr
+                best.sx = sx_try; best.sy = sy_try; best.ratioErr = ratioErr;
+            end
+        end
+    end
+
+    if isnan(best.sx)
+        error('Could not match ratio; this should be rare. Try adjusting ns slightly.');
+    end
+
+    sx = best.sx; sy = best.sy;
+
+    % Report
+    nx = 2*floor(Kx_max/sx) + 1;
+    ny = 2*floor(Ky_max/sy) + 1;
+    out = struct;
+    out.Kx_max = Kx_max; out.Ky_max = Ky_max;
+    out.ns = ns; out.nx = nx; out.ny = ny; out.N_total = nx*ny - 1; % minus DC
+    out.fx_step = sx / Wdeg; out.fy_step = sy / Hdeg;
+    out.ratio_des = rho_des; out.ratio = sx/sy;
+end
+

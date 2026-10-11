@@ -1,0 +1,256 @@
+% Setup a small test window:
+Screen('Preference','SkipSyncTests',1);
+S = MarmoViewRigSettings;  % your rig helper
+S.screenRect = [0 0 641 481];
+A = marmoview.openScreen(S);
+
+% Build a hyperplaid in PROCEDURAL mode (fast):
+hp = stimuli.hyperplaid_static(A.window, ...
+    'screenRect', S.screenRect, ...
+    'pixPerDeg', S.pixPerDeg, ...
+    'frameRate', 60, ...
+    'spatialFrequencies', 2, ...
+    'K', 6, ...
+    'updateEveryNFrames',1,...
+    'contrast', 0.4);
+
+
+hp.beforeTrial();
+hp.stimValue = 1;
+
+for f = 1
+    hp.beforeFrame();
+    vbl = Screen('Flip', A.window);
+    % Log numeric row:
+    row = hp.currentLogRowNumeric(vbl);
+    % store row as needed in your protocol...
+
+
+
+    %
+    % After a Screen('Flip'), capture the on-screen image:
+    gpuFrame = mean(Screen('GetImage', A.window, S.screenRect, [], 0),3); % no float
+
+    % CPU render the same frame:
+    cpuFrame = hp.getImage(S.screenRect, 1); % your hyperplaid_static instance
+
+    % Compare mean absolute error (on a linearized pipeline they should match up to rounding):
+    mae = mean(abs(double(gpuFrame(:)) - double(cpuFrame(:))));
+    fprintf('GPU/CPU MAE: %.3f (expected ~<= 1 LSB)\n', mae);
+
+    hp.afterFrame(); %update
+    %
+    figure(2)
+    subplot(221)
+    imagesc(gpuFrame(:,:)); axis equal tight
+    subplot(222)
+    imagesc(cpuFrame(:,:)); axis equal tight
+    subplot(223)
+    imagesc(gpuFrame((240-10):(240+10),(320-10):(320+10))); axis equal tight
+    subplot(224)
+    imagesc(cpuFrame((240-10):(240+10),(320-10):(320+10))); axis equal tight
+    colormap(gray)
+
+    pause(1)
+end
+%%
+% Lock a single atom of your choice:
+i = 100;                          % pick an index in bank
+hp.K = 1;
+hp.current.idx     = i;
+hp.current.fx      = hp.bank(i).fx;
+hp.current.fy      = hp.bank(i).fy;
+hp.current.phiSent = pi/2;        % test phase
+hp.current.amp     = 0.2;
+hp.frameUpdate     = inf;         % <- prevents automatic resample
+
+% Now draw without changing current:
+Screen('FillRect', hp.winPtr, hp.bgGrey);
+Screen('BlendFunction', hp.winPtr, GL_ONE, GL_ONE);
+hp.beforeFrame();                 % uses current.* as-is
+vbl = Screen('Flip', hp.winPtr); %#ok<NASGU>
+
+
+
+%%
+% Pick one atom i:
+i = hp.current.idx(1);  % or set hp.current to that atom explicitly
+hp.K = 1; hp.current.idx = i;
+hp.current.fx = hp.bank(i).fx; hp.current.fy = hp.bank(i).fy;
+hp.current.amp = 0.2;
+
+for phi = [pi/2, -pi/2, 0, pi]
+  hp.current.phiSent = phi;
+  Screen('FillRect', hp.winPtr, hp.bgGrey); Screen('BlendFunction', hp.winPtr, GL_ONE, GL_ONE);
+  hp.beforeFrame(); 
+  vbl = Screen('Flip', hp.winPtr); %#ok<NASGU>
+  G = mean(Screen('GetImage', hp.winPtr, hp.screenRect, [], 0),3);
+  pause(.1)
+
+  [h,w] = deal(RectHeight(hp.screenRect), RectWidth(hp.screenRect));
+  c = [floor(h/2)+1, floor(w/2)+1];
+  fprintf('phi=%.2f: center = %.2f (bg=%d)\n', phi, G(c(1),c(2)), hp.bgGrey);
+  cpuFrame = hp.getImage(S.screenRect, 1); % your hyperplaid_static instance
+  fprintf('phi=%.2f: center for cpu = %.2f (bg=%d)\n', phi, cpuFrame(c(1),c(2)), hp.bgGrey);
+end
+
+amp = hp.contrast / sqrt(hp.K);
+pred = hp.bgGrey - 255 * amp / sqrt(2);
+G = mean(Screen('GetImage', hp.winPtr, hp.screenRect, [], 0),3);
+[h,w] = size(G); c = [floor(h/2)+1, floor(w/2)+1];
+meas = double(G(c(1),c(2)));
+fprintf('Center: measured %.2f  predicted %.2f  (Δ=%.2f)\n', meas, pred, meas - pred);
+
+
+
+%% interrogate the getimage for what is happening
+rect = hp.screenRect; 
+binSize = 1; 
+
+w = RectWidth(hp.screenRect);
+h = RectHeight(hp.screenRect);
+cx = (hp.screenRect(1) + hp.screenRect(3)) / 2;
+cy = (hp.screenRect(2) + hp.screenRect(4)) / 2;
+
+% [xPix, yPix] = meshgrid( (1:w) + hp.screenRect(1) - cx, ...
+%                          (1:h)' + hp.screenRect(2) - cy );
+[xpix, ypix] = meshgrid( (1:w) - (w+1)/2, ...
+                         (1:h) - (h+1)/2 );
+Xdeg =  xPix / hp.pixPerDeg;
+Ydeg = -yPix / hp.pixPerDeg;
+
+acc = zeros(h, w, 'double');
+for j = 1:hp.K
+    fx = hp.current.fx(j); fy = hp.current.fy(j);
+    phi = hp.current.phiSent(j);
+    acc = acc + sin( 2*pi*(fx.*Xdeg + fy.*Ydeg) + phi );
+end
+
+Ilin = (double(hp.bgGrey)/255) + (hp.current.amp) * acc;
+Ilin = min(max(Ilin, 0), 1);
+
+L = max(1, round(rect(1) - hp.screenRect(1) + 1));
+T = max(1, round(rect(2) - hp.screenRect(2) + 1));
+R = min(w, round(rect(3) - hp.screenRect(1)));
+B = min(h, round(rect(4) - hp.screenRect(2)));
+Ilin = Ilin(T:B, L:R);
+
+if binSize > 1
+    Ilin = localBoxDownsample(Ilin, binSize);
+end
+I = uint8(round(Ilin * 255));
+
+I(c(1),(2));
+%%
+
+hp.K = 2; hp.current.amp = 0.2;
+hp.current.idx = [i i];
+hp.current.fx  = [hp.bank(i).fx hp.bank(i).fx];
+hp.current.fy  = [hp.bank(i).fy hp.bank(i).fy];
+hp.current.phiSent = [0, pi];    % opposite phase
+
+Screen('FillRect', hp.winPtr, hp.bgGrey); Screen('BlendFunction', hp.winPtr, GL_ONE, GL_ONE);
+hp.beforeFrame(); vbl = Screen('Flip', hp.winPtr);
+G = mean(Screen('GetImage', hp.winPtr, hp.screenRect, [], 0),3);
+fprintf('cancel test: mean dev = %.3f LSB\n', mean(abs(double(G(:))-hp.bgGrey)));
+
+%%
+
+Klist = [1 2 4 6 8];
+for K = Klist
+  hp.K = K; hp.sampleComponents();
+  rmsVals = zeros(1,50);
+  for t=1:50
+    hp.beforeFrame(); vbl = Screen('Flip', hp.winPtr);
+    G = mean(Screen('GetImage', hp.winPtr, hp.screenRect, [], 0),3);
+    dev = double(G) - hp.bgGrey;
+    rmsVals(t) = std(dev(:));   % LSB
+    hp.afterFrame();
+  end
+  fprintf('K=%d: mean RMS %.2f LSB, expected ~ %.2f LSB\n', K, mean(rmsVals), 255*hp.contrast);
+end
+
+%%
+hp.K=1; hp.sampleComponents(); hp.current.phiSent=0; hp.beforeFrame(); Screen('Flip', hp.winPtr);
+G = mean(Screen('GetImage', hp.winPtr, hp.screenRect, [], 0),3);
+dev = double(G)-hp.bgGrey; [H,W] = size(dev);
+F = fftshift(fft2(dev));
+
+% Find dominant bin:
+[~,lin] = max(abs(F(:)));
+[kv,ku] = ind2sub(size(F), lin);
+% Convert bins to cyc/deg
+ppd = hp.pixPerDeg; Wdeg=W/ppd; Hdeg=H/ppd;
+fx_est = (ku-(W/2+1))/Wdeg; fy_est = (kv-(H/2+1))/Hdeg;
+fprintf('FFT peak (%.3f, %.3f) c/deg vs bank (%.3f, %.3f)\n', fx_est, fy_est, hp.current.fx, hp.current.fy);
+
+%%
+for K=[1 3 6 12]
+  hp.K=K; hp.sampleComponents();
+  hp.beforeFrame(); Screen('Flip', hp.winPtr);
+  G = mean(Screen('GetImage', hp.winPtr, hp.screenRect, [], 0),3);
+  fprintf('K=%2d mean = %.2f (bg=%d)\n', K, mean(G(:)), hp.bgGrey);
+end
+
+%%
+hp.K=1; hp.sampleComponents(); hp.current.amp=0.2;
+fx=hp.current.fx; fy=hp.current.fy;
+
+dx=0.25; dy=-0.125;              % deg
+dphi = 2*pi*(fx*dx + fy*dy);
+
+% Frame A
+hp.current.phiSent = 0; hp.beforeFrame(); Screen('Flip', hp.winPtr);
+GA = mean(Screen('GetImage', hp.winPtr, hp.screenRect, [], 0),3);
+
+% Frame B: same phi but shift image numerically by Δx,Δy:
+shiftPixX = round(dx*hp.pixPerDeg); shiftPixY = -round(dy*hp.pixPerDeg);
+GB = circshift(GA, [shiftPixY, shiftPixX]);
+
+% Frame C: no spatial shift, but phase-advanced:
+hp.current.phiSent = dphi; hp.beforeFrame(); Screen('Flip', hp.winPtr);
+GC = mean(Screen('GetImage', hp.winPtr, hp.screenRect, [], 0),3);
+
+fprintf('shift-vs-phase MAE: %.3f LSB\n', mean(abs(double(GB(:))-double(GC(:)))));
+
+%%
+% Find an atom and its opposite
+[~,i] = max([hp.bank.sf]);   % pick a high sf atom
+fx = hp.bank(i).fx; fy = hp.bank(i).fy;
+j = find(abs([hp.bank.fx] + fx) < 1e-6 & abs([hp.bank.fy] + fy) < 1e-6, 1);
+
+assert(~isempty(j),'Opposite -k not found in bank!');
+
+% Render both at same φ and compare signals: they differ by a sign flip when φ differs by π.
+
+%%
+fx = [hp.bank.fx]; fy = [hp.bank.fy];
+assert(numel(fx) == hp.ns^2 - 1);
+dFx = sort(unique(round(diff(sort(unique(fx))),3)));
+dFy = sort(unique(round(diff(sort(unique(fy))),3)));
+fprintf('Δfx unique ~ %s  |  Δfy unique ~ %s\n', mat2str(dFx), mat2str(dFy));
+
+
+
+
+%%
+% ori = 33; sf = 3.2; phi = 1.1; K = 1;
+% hp.current.ori     = ori;
+% hp.current.sf      = sf;
+% hp.current.phiSent = phi;
+% hp.current.amp     = 0.2;
+% hp.K               = K;
+%
+% % GPU
+% Screen('FillRect', hp.winPtr, hp.bgGrey);
+% Screen('BlendFunction', hp.winPtr, GL_ONE, GL_ONE);
+% aux = [phi, sf/hp.pixPerDeg, hp.current.amp, 1];
+% Screen('DrawTexture', hp.winPtr, hp.tex, [], hp.screenRect, ori, [], [], [], [], [], aux);
+% vbl = Screen('Flip', hp.winPtr); %#ok<NASGU>
+% %gpu = Screen('GetImage', hp.winPtr, hp.screenRect);
+% %%
+% gpuFrame = mean(Screen('GetImage', hp.winPtr, hp.screenRect, [], 0),3); % no float
+% % CPU
+% cpuFrame = hp.getImage(hp.screenRect, 1);
+%
+% fprintf('MAE = %.4f\n', mean(abs(double(gpuFrame(:)) - double(cpuFrame(:)))) );

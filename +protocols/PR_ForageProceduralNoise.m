@@ -327,46 +327,90 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                     o.hNoise.updateTextures(); % create the procedural texture
 
                     %***************************************************************
-                case 10 % Full-field static Hyperplaid (K superimposed gratings)
-                    % Log: time + K*(ori, cpd, phase, sign) = 1 + 4K columns
-%                     K = P.hp_K; if isempty(K), K = 6; end
-%                     o.NoiseHistory = nan(o.MaxFrame, 1 + 4*K);
-                    
-                    % e.g., in init for the hyperplaid noise type
+%                 case 14 % Full-field static Hyperplaid (K superimposed gratings)
+%                     % Log: time + K*(ori, cpd, phase, sign) = 1 + 4K columns
+% %                     K = P.hp_K; if isempty(K), K = 6; end
+% %                     o.NoiseHistory = nan(o.MaxFrame, 1 + 4*K);
+%                     
+%                     % e.g., in init for the hyperplaid noise type
+%                     hp_K = P.hp_K;
+%                     o.NoiseHistory = nan(o.MaxFrame, 1 + 2 + 4*hp_K);  % time + [K amp] + 4*K
+% 
+%                     % Build orientation and SF banks
+%                     if isfield(P,'noiseorinum'), O = P.noiseorinum; else, O = 6; end
+%                     if isfield(P,'orioffset'),   off = P.orioffset;  else, off = 0; end
+%                     o.spatoris = (0:(O-1)) * (180/O) + off;   % 6 orientations (30° steps)
+% 
+%                     if isfield(P,'spfnum'),  Spfnum = P.spfnum;  else, Spfnum = 5; end
+%                     if isfield(P,'spfmin'),  sfmin = P.spfmin; else, sfmin = 3/2; end
+%                     if isfield(P,'spfmax'),  sfmax = P.spfmax; else, sfmax = 3*2; end
+%                     if Spfnum > 1 && sfmax > sfmin
+%                         o.spatfreqs = exp(linspace(log(sfmin), log(sfmax), Spfnum));
+%                     else
+%                         o.spatfreqs = sfmax*ones(1,Spfnum);
+%                     end
+%                     o.noiseNum = O * Spfnum;
+% 
+%                     % Instantiate hyperplaid stimulus
+%                     o.hNoise = stimuli.hyperplaid_static(o.winPtr, ...
+%                         'screenRect', S.screenRect, ...
+%                         'pixPerDeg',  S.pixPerDeg, ...
+%                         'frameRate',  S.frameRate, ...
+%                         'orientations', o.spatoris, ...
+%                         'spatialFrequencies', o.spatfreqs, ...
+%                         'K',          hp_K, ...
+%                         'M',          P.hp_M, ...
+%                         'contrast',   P.noiseContrast, ...
+%                         'updateEveryNFrames', ceil(S.frameRate / P.noiseFrameRate), ...
+%                         'probeMode',  isfield(P,'hp_probeMode') && P.hp_probeMode, ...
+%                         'probePairs', getfield(P,'hp_probePairs'), ...    % [i j] rows
+%                         'probeDeltaPhases', getfield(P,'hp_probeDeltaPhases'));
+% 
+%                     o.hNoise.updateTextures(); % create the procedural shader
+                case 14 % Full-field static Hyperplaid (K superimposed gratings; tight grid)
+
                     hp_K = P.hp_K;
-                    o.NoiseHistory = nan(o.MaxFrame, 1 + 2 + 4*hp_K);  % time + [K amp] + 4*K
+                    o.NoiseHistory = nan(o.MaxFrame, 1 + 1 + 4*hp_K);  % [time | K | (fx fy amp idx) × K] -phi is fixed
 
-                    % Build orientation and SF banks
-                    if isfield(P,'noiseorinum'), O = P.noiseorinum; else, O = 6; end
-                    if isfield(P,'orioffset'),   off = P.orioffset;  else, off = 0; end
-                    o.spatoris = (0:(O-1)) * (180/O) + off;   % 6 orientations (30° steps)
+%                     fx  = row(2 + (0:(nK-1)));
+%                     fy  = row(2 + nK + (0:(nK-1)));
+%                     amp = row(2 + 2*nK + (0:(nK-1)));
+%                     idx = row(2 + 3*nK + (0:(nK-1)));
+%                     I(x,y) = bgGrey + sum_j amp(j)*sin(2*pi*(fx(j)*X + fy(j)*Y) - pi/4);
 
-                    if isfield(P,'spfnum'),  Spfnum = P.spfnum;  else, Spfnum = 5; end
-                    if isfield(P,'spfmin'),  sfmin = P.spfmin; else, sfmin = 3/2; end
-                    if isfield(P,'spfmax'),  sfmax = P.spfmax; else, sfmax = 3*2; end
-                    if Spfnum > 1 && sfmax > sfmin
-                        o.spatfreqs = exp(linspace(log(sfmin), log(sfmax), Spfnum));
+                    % Build the tight grid from screen geometry:
+                    Wdeg = RectWidth(S.screenRect)/S.pixPerDeg;
+                    Hdeg = RectHeight(S.screenRect)/S.pixPerDeg;
+
+                    % Auto-pick strides from ns unless user overrides:
+                    ns = P.hp_ns;
+                    if isempty(P.hp_strideKx) || isempty(P.hp_strideKy)
+                        [sx, sy, info] = pickHartleyStridesFromNs(Wdeg, Hdeg, P.hp_maxSF, P.hp_maxSF, ns);
                     else
-                        o.spatfreqs = sfmax*ones(1,Spfnum);
+                        sx   = P.hp_strideKx;
+                        sy   = P.hp_strideKy;
+                        info = struct('nx', 2*floor(floor(Wdeg*P.hp_maxSF)/sx)+1, ...
+                            'ny', 2*floor(floor(Hdeg*P.hp_maxSF)/sy)+1, ...
+                            'N_total', []);
                     end
-                    o.noiseNum = O * Spfnum;
+                    fprintf('[Hyperplaid] sx=%d sy=%d | nx=%d ny=%d | maxSF=%.2f c/deg\n', ...
+                        sx, sy, info.nx, info.ny, P.hp_maxSF);
 
-                    % Instantiate hyperplaid stimulus
+                    % Instantiate the pre-rendered 8-bit texture bank (tight rectangular grid, no disk)
                     o.hNoise = stimuli.hyperplaid_static(o.winPtr, ...
                         'screenRect', S.screenRect, ...
                         'pixPerDeg',  S.pixPerDeg, ...
                         'frameRate',  S.frameRate, ...
-                        'orientations', o.spatoris, ...
-                        'spatialFrequencies', o.spatfreqs, ...
+                        'maxSF',      P.hp_maxSF, ...
+                        'ns',         ns, ...                 % exposes ns → auto-strides internally
+                        ... % If you prefer to pass explicit strides instead of ns, replace the two lines above with:
+                        ... % 'FmaxX_cpd', P.hp_maxSF, 'FmaxY_cpd', P.hp_maxSF, 'strideKx', sx, 'strideKy', sy, ...
                         'K',          hp_K, ...
-                        'M',          P.hp_M, ...
                         'contrast',   P.noiseContrast, ...
                         'updateEveryNFrames', ceil(S.frameRate / P.noiseFrameRate), ...
-                        'probeMode',  isfield(P,'hp_probeMode') && P.hp_probeMode, ...
-                        'probePairs', getfield(P,'hp_probePairs'), ...    % [i j] rows
-                        'probeDeltaPhases', getfield(P,'hp_probeDeltaPhases'));
+                        'bgGrey',     S.bgColour);
 
-                    o.hNoise.updateTextures(); % create the procedural shader
+                    o.hNoise.updateTextures();  % pre-render the atom bank
 
 
             end
@@ -692,7 +736,7 @@ classdef PR_ForageProceduralNoise < protocols.protocol
 
                         % time, orientation, cpd, phase, direction, speed, contrast
 
-                    case 10 % Hyperplaid, I think this actually should be closer to case 12 if it was updated properly
+                    case 14 % Full-field static Hyperplaid (tight rectangular grid)
                         o.hNoise.afterFrame();       % update internal counters
                         if isfield(o.S,'stereoMode') && o.S.stereoMode>0
                             Screen('SelectStereoDrawBuffer', o.winPtr, 0);
@@ -705,26 +749,17 @@ classdef PR_ForageProceduralNoise < protocols.protocol
 
                         o.FrameCount = o.FrameCount + 1;
 
-                        % Build header + components: [K, amp, fx/fy/phi/idx × K]
-                        nK   = o.hNoise.K;
-                        amp = o.hNoise.contrast / sqrt(max(nK,1));    % per-component amplitude
-                        
-                        row = nan(1, 2 + 4*nK);
-                        row(1) = nK;
-                        row(2) = amp;
-                        
-                        % components (interleaved)
-                        p = 3;
-                        for j = 1:nK
-                            row(p:(p+3)) = [ ...
-                                o.hNoise.current.fx(j), ...
-                                o.hNoise.current.fy(j), ...
-                                wrapToPi(o.hNoise.current.phi(j)), ...
-                                double(o.hNoise.current.idx(j)) ];
-                            p = p + 4;
-                        end
-                        
-                        % write to NoiseHistory (col 1 = time is set post-Flip elsewhere)
+                        % Current parameters
+                        nK  = o.hNoise.K;
+                        amp = o.hNoise.current.amp(:);   % signed amplitudes
+                        fx  = o.hNoise.current.fx(:);
+                        fy  = o.hNoise.current.fy(:);
+                        idx = o.hNoise.current.idx(:);
+
+                        % Build log row: [K | fx(1:K) | fy(1:K) | amp(1:K) | idx(1:K)]
+                        row = [nK, fx.', fy.', amp.', double(idx.')];
+
+                        % Write to NoiseHistory (col 1 = time, set after Flip)
                         o.NoiseHistory(o.FrameCount, 2:(1+numel(row))) = row;
 
                 end

@@ -1,0 +1,169 @@
+# README: Hartley Hyperplaid Procedural Stimulus (Updated 2025)
+
+This document defines the logic, mathematics, and implementation details of the **hyperplaid_procedural** stimulus class and its supporting utilities such as `pickHartleyStridesFromNs`. It unifies the rectangular Hartley lattice, radial disk cutoff, and log-radial frequency sampling into one consistent framework for building orthogonal, biologically relevant, and GPU-efficient stimuli.
+
+---
+
+## 1. Purpose and Design Philosophy
+
+`hyperplaid_procedural` dynamically generates Hartley (cas) basis gratings on the GPU using integer-lattice frequencies derived from screen geometry. The goal is to maintain exact orthogonality, mean-zero photometry, and phase reproducibility, while allowing flexible sub-sampling in frequency space.
+
+Key Ideas:
+
+* The full integer lattice defines an orthogonal basis on the finite rectangular display.
+* Sub-sampling (using strides or radial masks) defines an orthogonal subset spanning a coarser or band-limited subspace.
+* Snapping log-spaced frequencies to the lattice preserves exact orthogonality with minimal geometric error.
+* Half-plane sampling avoids redundant ±k pairs while preserving all information for real-valued images.
+
+---
+
+## 2. Mathematical Foundations
+
+### 2.1 Hartley Basis Definition
+
+Each atom is a real, mean-zero cas function:
+
+```
+H_k(x,y) = (1/sqrt(2)) * [cos(2*pi*(fx*x + fy*y)) + sin(2*pi*(fx*x + fy*y))]
+```
+
+where (fx, fy) = (kx/Wdeg, ky/Hdeg) and (kx, ky) are integers. All atoms on the integer lattice are mutually orthogonal under rectangular integration.
+
+### 2.2 ±k Symmetry and Half-Plane Representation
+
+For a real image:
+
+```
+H_-k(x,y) = -H_k(x,y)
+```
+
+Each ±k pair spans the same 2D sine/cosine subspace. You can represent all unique gratings using either:
+
+* The full plane (both ±k): redundant but physically symmetric.
+* The half-plane (e.g., ky > 0 plus ky=0,kx>0): non-redundant, orthogonal, and cleaner analytically.
+
+For complex-phase or analytic formulations (e.g., phase-rotation by eye position), the half-plane is preferred.
+
+---
+
+## 3. Lattice Construction and Strides
+
+### 3.1 Integer Lattice
+
+```
+kx ∈ [-Kx_max, Kx_max]
+ky ∈ [-Ky_max, Ky_max]
+```
+
+where Kx_max = floor(Wdeg * FmaxX) and Ky_max = floor(Hdeg * FmaxY).
+
+Spatial frequencies:
+
+```
+fx = kx / Wdeg
+fy = ky / Hdeg
+```
+
+### 3.2 Stride Down-Sampling
+
+Strides (sx, sy) determine lattice sampling density:
+
+```
+kx = mx * sx
+ky = my * sy
+```
+
+Sub-sampling preserves orthogonality among retained points but reduces the spanned subspace. Choosing sx, sy to make Δf nearly isotropic minimizes directional bias:
+
+```
+Δfx = sx / Wdeg
+Δfy = sy / Hdeg
+```
+
+### 3.3 Radial Disk Cutoff
+
+A circular band-limit sqrt(fx^2 + fy^2) ≤ Fmax_radial discards the rectangular-lattice corners, producing isotropic frequency coverage. Orthogonality is unchanged; completeness and flatness (tight-frame uniformity) are slightly reduced.
+
+### 3.4 Log-Radial Snapping (Optional)
+
+To emulate log-spaced frequency sampling while preserving lattice orthogonality:
+
+1. Generate target (rho_j, theta_n) pairs (log-spaced radii, uniform orientations).
+2. Snap to nearest integer lattice point:
+   kx = round(Wdeg * rho_j * cos(theta_n))
+   ky = round(Hdeg * rho_j * sin(theta_n))
+3. Exclude duplicates and DC.
+4. Keep points within radial cutoff.
+
+This preserves mean-zero, periodic gratings while approximating log-spaced sampling of rho. Typical deviation <5% in rho and <1 degree in theta for mid-high frequencies.
+
+---
+
+## 4. Shader Implementation
+
+Each pixel is rendered by:
+
+```
+float phase = 2.0 * PI * (kx * uv.x + ky * uv.y);
+float cas   = 0.70710678 * (cos(phase) + sin(phase));
+float dev   = amplitude * signVal * cas;
+gl_FragColor = vec4(dev, dev, dev, 1.0);
+```
+
+* `uv` is in degrees, centered on screen.
+* `amplitude` per atom = contrast / sqrt(K) for K superimposed gratings.
+* Additive blending around 0 restores correct mean luminance.
+
+---
+
+## 5. Orthonormality and Frame Diagnostics
+
+### 5.1 Gram Matrix Expectations
+
+| Condition            | Orthogonality | Note                                 |
+| -------------------- | ------------- | ------------------------------------ |
+| Full integer lattice | exact         | complete basis                       |
+| Strided subset       | exact         | reduced subspace                     |
+| Radial disk          | exact         | incomplete, non-tight                |
+| Log-radial snapped   | exact         | small (rho,theta) quantization error |
+
+### 5.2 Flatness Metric
+
+```
+S(x,y) = sum_i H_i(x,y)^2
+```
+
+For the full rectangle, S(x,y) is constant. For strided or disked sets, expect std/mean ≈ 0.02–0.05; deviations are smooth and correctable by per-pixel normalization if desired.
+
+---
+
+## 6. Practical Guidelines
+
+| Goal                  | Recommended Settings                                        |
+| --------------------- | ----------------------------------------------------------- |
+| High-resolution bank  | ns = Inf, full integer lattice                              |
+| Moderate resolution   | finite ns (e.g., 25–50), near-isotropic strides             |
+| Isotropic coverage    | 'equalStride', true                                         |
+| Biological band-limit | 'FmaxRadial', Fmax_cpd                                      |
+| Log-radial sampling   | 'logRadial', struct('Rmin',0.5,'Rmax',8,'nR',6,'nTheta',16) |
+
+---
+
+## 7. Interpretation and Analysis Notes
+
+* Integer lattice alignment ensures perfect periodicity and zero mean, but is not critical for small, central receptive fields.
+* Dropping lattice corners (radial disk) improves biological plausibility and reduces redundancy without biasing STA/STC results.
+* Snapping log-spaced rings preserves orthogonality while approximating cortical frequency scaling.
+* Half-plane representation is sufficient for real images and complex analyses; the full plane may be used for overcomplete stimulus sets if desired.
+
+---
+
+## 8. Future Extensions
+
+* Incorporate smooth radial tapers to restore near-tight-frame flatness.
+* Add complex-valued analytic mode for phase-rotation alignment to eye position.
+* Implement GPU diagnostics: Gram-matrix flatness, ring coverage, and per-pixel RMS visualizers.
+
+---
+
+Summary: The Hartley Hyperplaid procedural framework defines an exactly orthogonal set of real gratings on the integer Fourier lattice of the display, supports radial and log-radial sampling without bias, and provides a controllable bridge between mathematically clean subspaces and biologically realistic stimulus ensembles.

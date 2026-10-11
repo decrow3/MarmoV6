@@ -40,16 +40,16 @@ grat.range = P.range;
 grat.square = false; % true;  % if you want circle
 grat.gauss = gauss;
 grat.bkgd = P.bkgd;
-grat.transparent = 0.5;
-grat.pixperdeg = S.pixPerDeg;
+grat.transparent = 1;
+grat.pixPerDeg = S.pixPerDeg;
 
 
 gratpro.range = P.range;
 gratpro.square = false; % true;  % if you want circle
 gratpro.gauss = gauss;
 gratpro.bkgd = P.bkgd;
-gratpro.transparent = .5;
-gratpro.pixperdeg = S.pixPerDeg;
+gratpro.transparent = 1;
+gratpro.pixPerDeg = S.pixPerDeg;
 
 
 grat.updateTextures();
@@ -60,15 +60,15 @@ gratpro.position = [400 360];
 %%
 % grat.orientation = 0;
 % grat.drawGrating()
-gratpro.transparent = .05;
+gratpro.transparent = 1;
 gratpro.orientation = 90;
 gratpro.phase = gratpro.phase - 30;
 gratpro.drawGrating();
 
 % 
 
-rect = CenterRectOnPointd([0 0 gratpro.pixperdeg gratpro.pixperdeg]*P.snoisediam, gratpro.position(1), gratpro.position(2));
-% rect([2 4]) = rect([2 4]) + gratpro.pixperdeg*3;
+rect = CenterRectOnPointd([0 0 gratpro.pixPerDeg gratpro.pixPerDeg]*P.snoisediam, gratpro.position(1), gratpro.position(2));
+% rect([2 4]) = rect([2 4]) + gratpro.pixPerDeg*3;
 % Screen('FillRect', winPtr, 0, rect);
 % 
 Screen('Flip', winPtr, 0);
@@ -86,8 +86,8 @@ while GetSecs < t0 +5
     gratpro.drawGrating();
     
     %
-    rect = CenterRectOnPointd([0 0 gratpro.pixperdeg gratpro.pixperdeg]*P.snoisediam, gratpro.position(1), gratpro.position(2));
-    rect([2 4]) = rect([2 4]) + gratpro.pixperdeg*3;
+    rect = CenterRectOnPointd([0 0 gratpro.pixPerDeg gratpro.pixPerDeg]*P.snoisediam, gratpro.position(1), gratpro.position(2));
+    rect([2 4]) = rect([2 4]) + gratpro.pixPerDeg*3;
     Screen('FillRect', winPtr, 0, rect);
     
     Screen('Flip', winPtr, 0, 2);
@@ -96,20 +96,20 @@ while GetSecs < t0 +5
 end
 
 %% test grat pro reconstruction
-gratpro.position = [500 504];
-gratpro.phase = 180;
-gratpro.gauss = false;
+% gratpro.position = [500 504];
+% gratpro.phase = 180;
+% gratpro.gauss = false;
 gratpro.orientation = gratpro.orientation + 1;
 gratpro.drawGrating();
 Screen('Flip', winPtr);
-rect = [0 0 1270 720];
-% rect = CenterRectOnPointd([0 0 gratpro.pixperdeg gratpro.pixperdeg]*P.snoisediam, gratpro.position(1), gratpro.position(2));
+%rect = [0 0 1270 720];
+% rect = CenterRectOnPointd([0 0 gratpro.pixPerDeg gratpro.pixPerDeg]*P.snoisediam, gratpro.position(1), gratpro.position(2));
 % rect = round(rect);
 %
 % gratpro.phase = 186+3;
-I = gratpro.getImage(rect, 1);
+I = gratpro.getImage(A.screenRect, 1);
 
-I1 = Screen('GetImage', winPtr, rect);
+I1 = Screen('GetImage', winPtr, A.screenRect);
 I1 = mean(I1, 3);
 figure(1); clf;
 subplot(1,3,1)
@@ -119,7 +119,9 @@ imagesc(I1)
 subplot(1,3,3)
 imagesc(I1 - I, [-10 10])
 
-
+%%
+imagesc(I1-round(254-I));colorbar
+sum(I1-(254-round(I)),'all')
 
 
 %% close textures

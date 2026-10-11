@@ -1,0 +1,115 @@
+Hartley Lattice Shader – Weighted Version
+Overview
+
+This shader implements a frequency-domain white-noise generator using a full Hartley lattice.
+Instead of drawing a small number of sinusoidal components (K) sequentially (as in the existing hartleyplaid_procedural), this version draws all lattice components simultaneously on the GPU. Each spatial-frequency component (kx, ky) receives an independent weight that determines its amplitude and sign in the summed image.
+
+Mathematically:
+
+I(x, y) = Σ_i [ w_i * cas(2π(kx_i * x + ky_i * y)) ]
+
+
+where cas(φ) = cos(φ) + sin(φ) and w_i are per-component weights.
+
+This allows:
+
+One-hot tests: set one weight to 1 and the rest to 0 → renders a single Hartley basis function.
+
+Dense white noise: assign all weights random zero-mean values → produces a band-limited white-noise field.
+
+Data Flow
+Stage	Description
+CPU (MATLAB / PTB)	Builds the full frequency lattice once (kx, ky) using buildBank().
+CPU → GPU	Uploads the lattice and current weights to the GPU as a texture buffer or SSBO (Shader Storage Buffer Object).
+GPU (fragment shader)	Loops through all components, accumulates their contributions, and writes the final intensity to each pixel.
+Shader Input Structure
+
+Each entry in the GPU buffer contains:
+
+struct Component {
+    float kx;      // spatial frequency along X
+    float ky;      // spatial frequency along Y
+    float weight;  // per-component amplitude (includes sign)
+};
+
+
+These are uploaded once per frame (for dynamic weights) or once at initialization (for static lattices).
+
+Fragment Shader Logic (conceptual)
+uniform samplerBuffer compTex;  // or SSBO if supported
+uniform int nComp;
+in vec2 uv;
+out vec4 fragColor;
+
+const float PI = 3.1415926535;
+
+void main(void) {
+    float acc = 0.0;
+    for (int i = 0; i < nComp; i++) {
+        vec3 c = texelFetch(compTex, i).xyz;
+        float kx = c.x;
+        float ky = c.y;
+        float w  = c.z;
+        float phase = 2.0 * PI * (kx * uv.x + ky * uv.y);
+        acc += w * (cos(phase) + sin(phase));
+    }
+    fragColor = vec4(acc, acc, acc, 1.0);
+}
+
+
+This computes the sum of all Hartley atoms weighted by the supplied amplitudes.
+
+CPU-Side Workflow
+
+Build the lattice
+
+bank = buildHartleyBank(...);
+kx = [bank.kx];
+ky = [bank.ky];
+weights = zeros(size(kx));   % start one-hot
+
+
+Upload to GPU
+
+glBindTexture(GL_TEXTURE_BUFFER, compTexID);
+glBufferData(GL_TEXTURE_BUFFER, numel(kx)*3*4, [kx; ky; weights], GL_DYNAMIC_DRAW);
+
+
+One-hot test
+
+Set one element of weights to 1, all others to 0.
+
+Expect a single Hartley grating at that frequency.
+
+Dense white-noise mode
+
+Fill weights with randn() or sign(randn()).
+
+Optionally normalize global RMS contrast per frame.
+
+Advantages
+
+Unified pathway: same shader handles one-hot, sparse, or dense frequency-domain stimuli.
+
+Exact phase control: all components share the same spatial phase origin.
+
+Speed: single GPU pass, no CPU summation.
+
+Flexibility: supports per-frame random weights (spectral white noise) or static coefficients (basis tests).
+
+Future Extensions
+
+Optional radial cutoff mask applied in the weight buffer (set weights outside radius = 0).
+
+Add compute-shader normalization to match per-frame RMS contrast.
+
+Enable temporal correlations by reusing or filtering the weight sequence over time.
+
+Quick Summary
+Mode	Description	Use
+One-hot	One nonzero weight → renders a single Hartley atom	Debug / orthogonality tests
+Sparse	Few nonzero weights per frame	Classic “hyperplaid” mode
+Dense	All weights random each frame	Frequency-domain white noise for STC/TIFS
+
+This shader forms the backbone for testing both simple and fully dense Hartley-space stimuli.
+It unifies the “hyperplaid” and “frequency-noise” designs into one procedural implementation controllable by a list of per-component weights.
