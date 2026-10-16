@@ -1,6 +1,6 @@
 function results = simulate_fourierplaid_contrast(nFrames, seed)
 %SIMULATEFOURIERPLAIDCONTRAST Check nominal linear-range excursions.
-%   This samples all three random-phase settings without opening a PTB
+%   This samples all random-phase settings without opening a PTB
 %   window. No clipping or per-frame normalization is applied. The output
 %   reports the fraction that would lie outside the [0,1] framebuffer range.
 
@@ -10,7 +10,10 @@ if nargin < 2 || isempty(seed), seed = 8675309; end
 settingsNames = { ...
     'Forage_RandomPhaseHyperplaid', ...
     'Forage_RandomPhaseHyperplaid_Dense', ...
-    'Forage_RandomPhaseHyperplaid_Isotropic'};
+    'Forage_RandomPhaseHyperplaid_Isotropic', ...
+    'Forage_RandomPhaseHyperplaid_Spiral', ...
+    'Forage_RandomPhaseHyperplaid_Pminus1_4cpd_5648', ...
+    'Forage_RandomPhaseHyperplaid_Pminus2_16cpd_2800'};
 [u,v] = meshgrid(((1:128)-64.5)/128, -((1:72)-36.5)/72);
 modeNames = {'random-phase Fourier','Hartley reference'};
 results = repmat(struct, numel(modeNames), numel(settingsNames));
@@ -19,14 +22,31 @@ for iPreset = 1:numel(settingsNames)
     [S,P] = feval(settingsNames{iPreset});
     Wdeg = (S.screenRect(3)-S.screenRect(1))/S.pixPerDeg;
     Hdeg = (S.screenRect(4)-S.screenRect(2))/S.pixPerDeg;
-    [sx,sy] = localStrides(Wdeg,Hdeg,P.hp_maxSF,P.hp_ns,P.equalStride);
-    kxPositive = sx:sx:floor(Wdeg*P.hp_maxSF);
-    kyPositive = sy:sy:floor(Hdeg*P.hp_maxSF);
-    kxValues = [-kxPositive(end:-1:1), 0, kxPositive];
-    kyValues = [-kyPositive(end:-1:1), 0, kyPositive];
-    [KX,KY] = ndgrid(kxValues,kyValues);
-    keep = (KX>0) | (KX==0 & KY>0);
-    KX = KX(keep); KY = KY(keep);
+    if isfield(P,'hp_spiralBank') && P.hp_spiralBank
+        spiralMaxSF = P.hp_maxSF;
+        if isfield(P,'hp_spiralMaxSF')
+            spiralMaxSF = P.hp_spiralMaxSF;
+        end
+        spiralAxisCount = 0;
+        if isfield(P,'hp_spiralAxisCount')
+            spiralAxisCount = P.hp_spiralAxisCount;
+        end
+        [spiralBank,~] = stimuli.buildGoldenSpiralFourierBank( ...
+            Wdeg,Hdeg,P.hp_spiralTargetCount,spiralMaxSF, ...
+            P.hp_spiralDensityExponent,P.hp_spiralMinSF,spiralAxisCount);
+        nAxes = numel(spiralBank)/2;
+        KX = [spiralBank(1:nAxes).kx].';
+        KY = [spiralBank(1:nAxes).ky].';
+    else
+        [sx,sy] = localStrides(Wdeg,Hdeg,P.hp_maxSF,P.hp_ns,P.equalStride);
+        kxPositive = sx:sx:floor(Wdeg*P.hp_maxSF);
+        kyPositive = sy:sy:floor(Hdeg*P.hp_maxSF);
+        kxValues = [-kxPositive(end:-1:1), 0, kxPositive];
+        kyValues = [-kyPositive(end:-1:1), 0, kyPositive];
+        [KX,KY] = ndgrid(kxValues,kyValues);
+        keep = (KX>0) | (KX==0 & KY>0);
+        KX = KX(keep); KY = KY(keep);
+    end
 
     componentAmplitude = P.noiseContrast/sqrt(P.hp_K);
     for iMode = 1:numel(modeNames)

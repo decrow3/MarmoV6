@@ -9,9 +9,41 @@ renderer are unchanged.
 - `Forage_RandomPhaseHyperplaid`
 - `Forage_RandomPhaseHyperplaid_Dense`
 - `Forage_RandomPhaseHyperplaid_Isotropic`
+- `Forage_RandomPhaseHyperplaid_Spiral`
+- `Forage_RandomPhaseHyperplaid_Pminus1_4cpd_5648`
+- `Forage_RandomPhaseHyperplaid_Pminus2_16cpd_2800`
 
 Each setting inherits the corresponding Hartley preset and changes only
 `P.noisetype` to 15 and the display title.
+
+The spiral setting instead inherits the dense preset's task, contrast, and
+timing parameters, then replaces its rectangular frequency bank. It lays out
+golden-angle targets in physical `(fx,fy)` coordinates, independently snaps
+each target to its nearest exact screen-periodic `(kx,ky)` coordinate, then
+canonicalizes and deduplicates the physical axes. It never moves a target to
+a more distant coordinate to enforce uniqueness. Six distinct physical axes
+are sampled uniformly on every presentation; coordinate sign and continuous
+phase are then randomized. It does not schedule or enrich closure relations.
+
+`validate_fourier_spiral_bank` checks the canonicalization and antipodal
+mapping without opening a Psychtoolbox window. On the July treadmill geometry
+it checks canonical pairing, local snapping, deduplication, and exact requested
+axis-count mode.
+
+The spiral density is controlled by `P.hp_spiralDensityExponent`, interpreted
+as the areal-density power `rho(r) proportional to r^p`. The default `p=-1`
+reproduces the plotted bank. `p=0` gives uniform areal density, while `p=-2`
+uses the logarithmic-radius special case (equal target count per octave).
+For `p=-2`, `P.hp_spiralMinSF=0` automatically uses the smallest nonzero
+screen-periodic frequency; a positive value supplies an explicit lower bound.
+
+The two experiment presets use fixed continuous-proposal counts. Each proposal
+is snapped independently and duplicate physical axes are simply discarded;
+there is no nearest-unused reassignment, proposal expansion, or rank thinning.
+On the July treadmill geometry this gives:
+
+- Experiment 1: 6,000 proposals, `p=-1`, 0--4 c/deg, 5,648 physical axes, `K=6`.
+- Experiment 2: 4,540 proposals, `p=-2`, lattice minimum--16 c/deg, 2,800 physical axes, `K=6`.
 
 ## Component convention and history
 

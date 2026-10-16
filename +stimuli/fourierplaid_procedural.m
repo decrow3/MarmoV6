@@ -1,20 +1,71 @@
 classdef fourierplaid_procedural < stimuli.hartleyplaid_procedural
-% Random-phase Fourier hyperplaid on the existing Hartley frequency lattice.
+% Random-phase Fourier hyperplaid on a Hartley or snapped spiral lattice.
 %
-% The inherited constructor, stride picker, and bank builder define exactly
-% the same spectral lattice and coordinate sampler as noise type 14. This
-% subclass changes only the component phase convention and renderer.
+% Hartley-bank presets retain the inherited lattice. Spiral presets replace
+% it with independently snapped, canonicalized, deduplicated physical axes.
 
     properties
         schemaVersion = 'fourierplaid_v1'
         phaseConvention = 'cos(2*pi*(kx*u+ky*v)+phaseRad)'
         trialSeed = NaN
         trialInitialState = []
+        bankMode = 'hartley'
+        bankDefinitionVersion = 'hartley_lattice_v1'
+        spiralTargetCount = 2000
+        spiralAxisCount = 0
+        spiralMaxSF = 4
+        spiralDensityExponent = -1
+        spiralMinSF = 0
+        spiralBankInfo = struct()
     end
 
     methods
         function obj = fourierplaid_procedural(winPtr, varargin)
             obj = obj@stimuli.hartleyplaid_procedural(winPtr, varargin{:});
+        end
+
+        function configureSpiralBank(obj, targetCount, maxSF, densityExponent, minSF, axisCount)
+            % Replace the inherited rectangular Hartley bank with a
+            % golden-angle bank designed in physical cycles/degree and
+            % snapped to exact screen-periodic integer coordinates.
+            if nargin < 2 || isempty(targetCount), targetCount = 2000; end
+            if nargin < 3 || isempty(maxSF), maxSF = obj.FmaxX_cpd; end
+            if nargin < 4 || isempty(densityExponent), densityExponent = -1; end
+            if nargin < 5 || isempty(minSF), minSF = 0; end
+            if nargin < 6 || isempty(axisCount), axisCount = 0; end
+            validateattributes(targetCount, {'numeric'}, ...
+                {'scalar','integer','>=',obj.K});
+            validateattributes(maxSF, {'numeric'}, ...
+                {'scalar','real','finite','positive'});
+            validateattributes(densityExponent, {'numeric'}, ...
+                {'scalar','real','finite','>=',-2});
+            validateattributes(minSF, {'numeric'}, ...
+                {'scalar','real','finite','nonnegative','<',maxSF});
+            validateattributes(axisCount, {'numeric'}, ...
+                {'scalar','integer','nonnegative'});
+            obj.bankMode = 'golden_spiral_snap';
+            obj.bankDefinitionVersion = 'golden_spiral_nearest_dedup_v2';
+            obj.spiralTargetCount = double(targetCount);
+            obj.spiralAxisCount = double(axisCount);
+            obj.spiralMaxSF = double(maxSF);
+            obj.spiralDensityExponent = double(densityExponent);
+            obj.spiralMinSF = double(minSF);
+            obj.bank = obj.buildBank();
+            obj.bankReady = true;
+        end
+
+        function bank = buildBank(obj)
+            if strcmp(obj.bankMode, 'golden_spiral_snap')
+                Wdeg = RectWidth(obj.screenRect) / obj.pixPerDeg;
+                Hdeg = RectHeight(obj.screenRect) / obj.pixPerDeg;
+                [bank, obj.spiralBankInfo] = ...
+                    stimuli.buildGoldenSpiralFourierBank(Wdeg, Hdeg, ...
+                    obj.spiralTargetCount, obj.spiralMaxSF, ...
+                    obj.spiralDensityExponent, obj.spiralMinSF, ...
+                    obj.spiralAxisCount);
+            else
+                bank = buildBank@stimuli.hartleyplaid_procedural(obj);
+            end
         end
 
         function initGLAndShader(obj)
@@ -176,7 +227,21 @@ classdef fourierplaid_procedural < stimuli.hartleyplaid_procedural
             obj.bankReady = false;
             if isstruct(obj.shader) && isfield(obj.shader, 'program') && ...
                     obj.shader.program > 0
-                try Screen('Close', obj.shader.program); catch, end
+                % A GLSL program is not a Psychtoolbox window/texture.
+                % Screen('Close', program) can close an unrelated PTB
+                % resource when the numeric handles happen to collide.
+                openGLActive = false;
+                try
+                    Screen('BeginOpenGL', obj.winPtr);
+                    openGLActive = true;
+                    glUseProgram(0);
+                    glDeleteProgram(obj.shader.program);
+                    Screen('EndOpenGL', obj.winPtr);
+                catch
+                    if openGLActive
+                        try Screen('EndOpenGL', obj.winPtr); catch, end
+                    end
+                end
             end
             obj.shader = [];
             try
