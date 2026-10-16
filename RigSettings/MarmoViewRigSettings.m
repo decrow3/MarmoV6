@@ -17,7 +17,7 @@ function S = MarmoViewRigSettings
 % For example, if you change the monitor set up, you only change those
 % monitor related variables here.
 % 
-RigName = 'testTDM';
+RigName = 'laptop';
 
 switch RigName
 
@@ -118,11 +118,11 @@ switch RigName
         
 
     case 'laptop'
-        
+        Screen('Preference', 'SkipSyncTests', 1); % development only
         S.inputs = {'eyetrack_dummy'};
         S.outputs = [];
         S.feedback = {'feedback_dummy'};
-        S.DataPixx = true;
+        S.DataPixx = false;
 
         S.monitor = 'Laptop';         % Monitor used for display window
         S.screenNumber = 0;                 % Designates the display for task stimuli

@@ -2,6 +2,8 @@ function A=openScreen(S,A)
 % OPENSCREEN Opens PTB window with parameters specified in S
 
 % Initialize open GL settings
+% Required before any stimulus uses Screen('BeginOpenGL', ...).
+InitializeMatlabOpenGL;
 featureLevel = 0; % use the 0-255 range in psychtoolbox (1 = 0-1)
 PsychDefaultSetup(featureLevel);
 

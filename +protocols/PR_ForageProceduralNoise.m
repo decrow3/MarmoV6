@@ -461,6 +461,36 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                    'updateEveryNFrames', ceil(S.frameRate / P.noiseFrameRate), ...
                    'bgGrey',     S.bgColour);
 
+               if isfield(P, 'hp_spiralBank') && P.hp_spiralBank
+                   spiralCount = 2000;
+                   if isfield(P, 'hp_spiralTargetCount')
+                       spiralCount = P.hp_spiralTargetCount;
+                   end
+                   spiralMaxSF = P.hp_maxSF;
+                   if isfield(P, 'hp_spiralMaxSF')
+                       spiralMaxSF = P.hp_spiralMaxSF;
+                   end
+                   spiralDensityExponent = -1;
+                   if isfield(P, 'hp_spiralDensityExponent')
+                       spiralDensityExponent = P.hp_spiralDensityExponent;
+                   end
+                   spiralMinSF = 0;
+                   if isfield(P, 'hp_spiralMinSF')
+                       spiralMinSF = P.hp_spiralMinSF;
+                   end
+                   spiralAxisCount = 0;
+                   if isfield(P, 'hp_spiralAxisCount')
+                       spiralAxisCount = P.hp_spiralAxisCount;
+                   end
+                   o.hNoise.configureSpiralBank(spiralCount, spiralMaxSF, ...
+                       spiralDensityExponent, spiralMinSF, spiralAxisCount);
+                   fprintf(['Golden spiral Fourier bank: %d physical axes ' ...
+                       'from %d proposals (%.3g cpd radial limit, p=%.3g).\n'], ...
+                       o.hNoise.spiralBankInfo.physicalAxisCount, ...
+                       o.hNoise.spiralBankInfo.proposalCountUsed, o.hNoise.spiralMaxSF, ...
+                       o.hNoise.spiralDensityExponent);
+               end
+
 
 
        end
@@ -1164,6 +1194,10 @@ classdef PR_ForageProceduralNoise < protocols.protocol
                 PR.FourierPhaseConvention = o.hNoise.phaseConvention;
                 PR.FourierRngSeed = o.hNoise.trialSeed;
                 PR.FourierRngInitialState = o.hNoise.trialInitialState;
+                PR.FourierBankMode = o.hNoise.bankMode;
+                PR.FourierBankDefinitionVersion = ...
+                    o.hNoise.bankDefinitionVersion;
+                PR.FourierBankInfo = o.hNoise.spiralBankInfo;
             elseif isa(o.hNoise, 'stimuli.hartleyplaid_procedural')
                 PR.hNoise.bank = []; %too big to store everything on every trial. (not unique to trials)
             end
