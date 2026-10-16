@@ -119,6 +119,11 @@ unseen = cellfun(@(d) strcmp(d.PR.conditionIDA,'null556_scale_1') && ...
     strcmp(d.PR.pairType,'null-catch'),D) & valid;
 assert(any(unseen) && all(strcmp(choices(unseen),'none')));
 
+% Two identical visible fields: valid, followed, and split between A and B.
+baseline = strcmp(types,'achromatic-achromatic') & valid;
+assert(any(baseline) && any(strcmp(choices(baseline),'A')) && ...
+    any(strcmp(choices(baseline),'B')) && ~any(strcmp(choices(baseline),'none')));
+
 analysis = analyzeMarmosetConePhenotypeFlow(D,struct('BootstrapIterations',20));
 assert(contains(analysis.RuleBasedInterpretation,'556 dichromat'));
 assert(strcmp(analysis.PhenotypeModel.BestPhenotype,'D_556'));
@@ -168,6 +173,9 @@ for k = 1:2
     signal(k) = abs(contrast(2,2)-contrast(1,2))/2;
 end
 [best,target] = max(signal);
+if abs(signal(1)-signal(2)) < 1e-12
+    target = 1 + mod(P.repeatIndex,2); % identical fields: alternate
+end
 if best < 0.01
     target = 0;
 end

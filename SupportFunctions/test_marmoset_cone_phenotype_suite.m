@@ -9,6 +9,7 @@ test_marmoset_spectral_verification;
 test_analyze_marmoset_cone_phenotype_flow;
 test_marmoset_protocol_simulation;
 test_marmoset_real_calibration;
+test_human_cone_check;
 test_cone_contrast_colors;
 test_human_isoluminant_ml;
 fprintf('test_marmoset_cone_phenotype_suite: all tests passed.\n');

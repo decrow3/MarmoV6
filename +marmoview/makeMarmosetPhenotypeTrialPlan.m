@@ -7,6 +7,9 @@ function plan = makeMarmosetPhenotypeTrialPlan(conditionBank,options)
 %   null-catch        detection of each null against an invisible field
 %   achromatic-catch  detection of achromatic fields
 %   null-achromatic   optional: null against the matched achromatic field
+%   achromatic-achromatic  rivalry baseline: two identical, clearly visible
+%                     fields (the same achromatic condition on both walks),
+%                     so the split expected when both fields are seen
 %   catch-catch       baseline: both fields invisible
 %
 % Every pair receives the identical sequence of (trajectory pair, walk
@@ -16,7 +19,8 @@ function plan = makeMarmosetPhenotypeTrialPlan(conditionBank,options)
 % Options: RepeatsPerPair (12; legacy RepeatsPerCondition), TrajectoryPairCount
 % (6; legacy TrajectoryCount), RandomSeed, RewardAmount, CatchTrialFraction
 % (0.1, catch-catch share of all trials), IncludeDetectionPairs (true),
-% IncludeAchromaticPairs (false), MaximumRun (2).
+% IncludeAchromaticPairs (false), IncludeAchromaticBaselinePairs (true),
+% MaximumRun (2).
 
 if nargin < 2 || isempty(options)
     options = struct();
@@ -34,6 +38,7 @@ options = setDefault(options,'RewardAmount',1);
 options = setDefault(options,'CatchTrialFraction',0.1);
 options = setDefault(options,'IncludeDetectionPairs',true);
 options = setDefault(options,'IncludeAchromaticPairs',false);
+options = setDefault(options,'IncludeAchromaticBaselinePairs',true);
 options = setDefault(options,'MaximumRun',2);
 
 repeats = round(options.RepeatsPerPair);
@@ -116,7 +121,11 @@ function pairs = buildPairs(bank,options)
 conditions = bank.Conditions;
 types = {conditions.ConditionType};
 isNull = strcmp(types,'pigment-null');
-isNominalNull = isNull & ismember([conditions.NullPeakNm],[543 556 563]);
+diagnosticPeaks = [543 556 563];
+if isfield(bank,'DiagnosticNullPeaksNm')
+    diagnosticPeaks = bank.DiagnosticNullPeaksNm; % e.g. human [558 530]
+end
+isNominalNull = isNull & ismember([conditions.NullPeakNm],diagnosticPeaks);
 achromatic = find(strcmp(types,'achromatic'));
 catchIndex = find(strcmp(types,'catch'),1);
 levelIndex = @(index) levelOf(bank,conditions(index));
@@ -151,6 +160,11 @@ if logical(options.IncludeAchromaticPairs)
         end
     end
 end
+if logical(options.IncludeAchromaticBaselinePairs)
+    for index = achromatic
+        pairs = addPair(pairs,'achromatic-achromatic',conditions,index,index,0);
+    end
+end
 if ~isempty(catchIndex)
     pairs = addPair(pairs,'catch-catch',conditions,catchIndex,catchIndex,0);
 end
@@ -179,7 +193,8 @@ end
 
 
 function types = uniquePairTypes()
-types = {'null-null','null-catch','achromatic-catch','null-achromatic','catch-catch'};
+types = {'null-null','null-catch','achromatic-catch','null-achromatic', ...
+    'achromatic-achromatic','catch-catch'};
 end
 
 

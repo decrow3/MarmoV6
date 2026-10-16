@@ -51,6 +51,10 @@ types = {planA.Pairs.PairType};
 assert(nnz(strcmp(types,'null-null')) == 6); % 3 pairs at each of 2 levels
 assert(nnz(strcmp(types,'null-catch')) == 6);
 assert(nnz(strcmp(types,'achromatic-catch')) == 1);
+baselinePair = planA.Pairs(strcmp(types,'achromatic-achromatic'));
+assert(numel(baselinePair) == 1);
+assert(baselinePair.ConditionIndexA == baselinePair.ConditionIndexB);
+assert(strcmp(bank.Conditions(baselinePair.ConditionIndexA).ConditionType,'achromatic'));
 assert(nnz(strcmp(types,'catch-catch')) == 1);
 reference = [];
 for k = find(~strcmp(types,'catch-catch'))

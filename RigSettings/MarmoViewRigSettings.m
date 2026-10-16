@@ -256,7 +256,7 @@ switch RigName
         S.DummyScreen = false; % TODO: remove this parameter (it should be covered by screen Rect. Is it? NO!!!!! But it should be)
         
 
-    case 'laptop'
+    case 'Dell test'
         
         S.inputs = {'eyetrack_dummy'};
         S.outputs = [];
@@ -331,7 +331,36 @@ switch RigName
         S.gamma = 2.56;
         S.screenDistance = 56;              % Distance of eye to screen (cm)
         S.pixPerDeg = PixPerDeg(S.screenDistance,S.screenWidth,S.screenRect(3));
-         
+ 
+    case 'laptop'
+        
+        S.inputs = {'eyetrack_dummy'};
+        S.outputs = [];
+        S.feedback = {'feedback_dummy'};
+        S.DataPixx = true;
+
+        S.monitor = 'Laptop';         % Monitor used for display window
+        S.screenNumber = 0;                 % Designates the display for task stimuli
+        S.frameRate = 60;                  % Frame rate of screen in Hz
+        S.screenRect = [0 0 960 540];     % Screen dimensions in pixels
+        S.screenWidth = 15;                 % Width of screen (cm)
+        S.centerPix =  [480 270];           % Pixels of center of the screen
+        S.guiLocation = [1000 100 890 660];
+        S.bgColour = 127; % 186 if not gamma corrected
+
+        S.screenDistance = 14; %57;         % Distance of eye to screen (cm)
+        S.pixPerDeg = PixPerDeg(S.screenDistance,S.screenWidth,S.screenRect(3));
+        S.DummyScreen = true; % TODO: remove this parameter (it should be covered by screen Rect. Is it?)
+
+        S.gamma = 1;
+        S.screenDistance = 87;              % Distance of eye to screen (cm)
+        S.pixPerDeg = PixPerDeg(S.screenDistance,S.screenWidth,S.screenRect(3));
+        
+        S.eyetrack_dummy = true;
+        S.feedback_dummy = [];
+        
+        
+  
 
     otherwise % laptop development
 

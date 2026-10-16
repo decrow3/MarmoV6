@@ -33,6 +33,10 @@
 
 - `null-null` (diagnostic): each pair of nulls.
 - `null-catch`, `achromatic-catch` (detection): the field against an invisible field.
+- `achromatic-achromatic` (rivalry baseline): two identical, clearly visible fields on separate walks.
+  - Gives the split expected when both fields are seen (start bias, switching, walk preference).
+  - A trichromat's null-null pairs should look like this; a dichromat's should not.
+  - On by default; set `IncludeAchromaticBaselinePairs = false` to drop it.
 - `catch-catch` (baseline): measures chance following.
 - `null-achromatic` (optional): each null against the matched achromatic field.
 - Every pair gets the identical set of (trajectory pair, walk assignment) combinations.
@@ -169,6 +173,25 @@ result = analyzeMarmosetConePhenotypeFlow('Output/session_file.mat');
   - `ModelRobustness` reports this per condition.
   - `NullSweepOffsetsNm` (e.g., `[-2 0 2]`) adds nulls around each peak so the behavioural minimum can be located.
 - Males are expected to be dichromats; use sex as a sanity check in the validation report, not in the fit.
+
+## Human cone check (`HumanConeCheckFlow`)
+
+- The same protocol, walks, and scoring, but with human cone-isolating fields (cones 558/530/420 nm):
+  - `nullL`: L and S silent, only M modulated. A deuteranope should not see it.
+  - `nullM`: M and S silent, only L modulated. A protanope should not see it.
+  - `achromatic_scale_1` and `catch`, as for marmosets.
+- `nullL` and `nullM` are matched: each modulates its one remaining cone at the same contrast (10% on the Dell proxy).
+- Run on the Dell:
+  1. Set `RigName = 'Dell test'` in `RigSettings/MarmoViewRigSettings.m`. That rig opts in to the proxy calibration, and the title shows `PROXY`.
+  2. Select `HumanConeCheckFlow` in MarmoV6.
+  3. The mouse stands in for the eye tracker. Put the cursor on the fixation point to start each trial.
+  4. Move the cursor to the centre of whichever swarm you see. If you see neither, leave it still.
+- The session has 56 trials of 4 s each, with no reward.
+- Analyse with `analyzeHumanConeCheck('Output/<session>.mat')`.
+  - It reports detection of each field against the catch-catch chance rate.
+  - It reads off a deuteranope, protanope, or both-respond pattern.
+  - `VisibleBaselineFollowA` (two identical achromatic swarms) is the reference split for the nullL-vs-nullM contest.
+- On the proxy calibration the silent cone is only approximately silent, so treat the result as a demonstration, not a diagnosis.
 
 ## Tests
 
