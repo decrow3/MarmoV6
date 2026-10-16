@@ -88,3 +88,37 @@ Run `validate_fourierplaid_gpu_cpu` on the treadmill display with a dedicated
 phases 0, pi/2, pi, and 3*pi/2 to expose shader/CPU phase-sign or y-axis
 convention errors. This display-dependent test cannot be completed away from
 the calibrated rig.
+
+## Laptop validation (2026-10-16)
+
+`test_fourierplaid_laptop` exercised the three spiral presets on the NVIDIA
+RTX 3050 Ti laptop GPU using the configured 960-by-540 laptop window,
+six components, and preset contrast 0.30. Four single-component phases and
+one random six-component mixture per preset matched the quantized CPU
+reconstruction within approximately 1/255 (RMSE about 0.00069).
+The test uses an uncorrected floating-point framebuffer; it does not validate
+monitor gamma or photometry. The real dummy tracker and window mouse readings
+agreed with zero coordinate error in the final run. Calibration center was
+[480 270], with dx=1 and dy=-1. This is a renderer/input smoke test, not a full
+fixation/reward trial through the MarmoView GUI.
+
+Psychtoolbox reported impossible beamposition timestamps and disabled its
+high-precision timestamping. Sync tests were skipped for windowed development;
+these results do not certify acquisition timing. Run the display-dependent
+checks on the recording rig before acquiring data.
+
+`test_eyeData_column_compatibility` verified identical output from the real
+online eye importer for nine-column, ten-column, and mixed-width trials.
+The extra column is ignored by that importer. Older calibration scripts that
+concatenate complete eyeData matrices still require matching column counts
+within the concatenated collection. The supplied August Hartley ferry package
+contains stimulus code, not a recording-analysis loader, so it cannot establish
+compatibility of an external Hartley analysis pipeline.
+
+Set `HartleyStim = true` beside `RigName` in
+`RigSettings/MarmoViewRigSettings.m` on Hartley or spiral stimulus days.
+After selecting the rig, this initializes OpenGL and sets `S.bgColour = 0.5`.
+The selected flag is also stored as `S.HartleyStim`. Its default is `false`,
+which preserves the rig's ordinary background (127 for TDM, Laser, and laptop).
+OpenGL also initializes in openScreen; the Hartley/Fourier constructor selects
+normalized color range and bgGrey=0.5. Switch the flag off for other protocols.

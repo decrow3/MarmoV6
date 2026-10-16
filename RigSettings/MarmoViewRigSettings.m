@@ -20,6 +20,7 @@ function S = MarmoViewRigSettings
 
 
 RigName = 'laptop';
+HartleyStim = false; % Set true on Hartley / random-phase spiral stimulus days.
 
 %Default setting
 S.persistence=false; 
@@ -337,7 +338,7 @@ switch RigName
         S.inputs = {'eyetrack_dummy'};
         S.outputs = [];
         S.feedback = {'feedback_dummy'};
-        S.DataPixx = true;
+        S.DataPixx = false; % Dummy laptop display has no DataPixx hardware.
 
         S.monitor = 'Laptop';         % Monitor used for display window
         S.screenNumber = 0;                 % Designates the display for task stimuli
@@ -394,6 +395,14 @@ switch RigName
         S.output_usb2serial = [];
 end
         
+% Apply after rig selection so each rig's ordinary background is preserved
+% when the manual switch is off.
+S.HartleyStim = HartleyStim;
+if HartleyStim
+    InitializeMatlabOpenGL;
+    S.bgColour = 0.5;
+end
+
 S.TimeSensitive = [];  % default, allow GUI updating in run func states
 %***************************
 
